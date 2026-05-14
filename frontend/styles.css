@@ -1232,9 +1232,24 @@ body.modal-open { overflow: hidden; }
   .puzzle-badge { padding: 3px 8px; }
   .puzzle-badge-label { display: none; }
 
+  /* 窄屏：tooltip 改为相对视口居中下浮，避免 scoring-badge 位置变化
+   * 导致 absolute 定位的 tooltip 出屏。
+   * 用 fixed 而非 absolute，彻底脱离父级 overflow / 位置影响。 */
   .scoring-tooltip {
-    right: auto;
-    left: 0;
+    position: fixed;
+    top: auto;
+    bottom: 20px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    transform: translateY(8px);
   }
-  .scoring-tooltip::before { right: auto; left: 16px; }
+  .scoring-badge:hover .scoring-tooltip,
+  .scoring-badge:focus-visible .scoring-tooltip,
+  .scoring-badge:focus-within .scoring-tooltip {
+    transform: translateY(0);
+  }
+  /* 窄屏 tooltip 不再有指向 badge 的箭头（因为位置已远离 badge） */
+  .scoring-tooltip::before { display: none; }
 }
