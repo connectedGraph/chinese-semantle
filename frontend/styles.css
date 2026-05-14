@@ -1195,33 +1195,29 @@ body.modal-open { overflow: hidden; }
     font-size: 13px;
   }
 
+  /* 窄屏隐藏品牌副标题（英文 Chinese Semantle），
+   * 让 topbar 横向空间够 brand + 4 个按钮单行排布。 */
+  .brand-sub { display: none; }
+
   /* ---- 窄屏 topbar 重排 ----
-   * 设计意图：两行布局，避免任何单个元素被挤压成竖排或多行。
-   *   行 1：品牌 logo（左）  +  随机计分游戏 按钮（右，主 CTA）
-   *   行 2：每日挑战 · 回溯 · 出题（次要操作集合）
-   * 当前游戏的 mode / scoring / puzzle_code 徽章在独立的 .gameinfo-bar 中，
-   * 不再受 topbar 排版影响。
+   * 设计意图：尽量保持 topbar 单行，brand-sub 隐藏后留出的空间够装 4 个按钮。
+   * 如果 4 个按钮加起来仍超过可用宽度，flex-wrap 会让它们自然换行；
+   * 但**不**主动强制 .topbar-actions 独占一行（避免空间够时也被推到下一行）。
+   * 当前游戏的 mode / scoring / puzzle_code 徽章在独立的 .gameinfo-bar 中。
    */
   .topbar {
     gap: 12px 8px;
     align-items: center;
   }
   .topbar-left {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
   }
-  /* 主 CTA 按钮"逃出" topbar-actions，独占第 1 行右侧 */
   .topbar-actions {
-    order: 2;
-    flex: 1 1 100%;
+    flex: 0 1 auto;
     flex-wrap: wrap;
     gap: 8px;
-    justify-content: flex-start;
-  }
-  #new-game-btn {
-    order: 1;
-    flex: 0 0 auto;
-    margin-left: auto;     /* 推到 topbar 第 1 行最右 */
+    justify-content: flex-end;
   }
   /* 次要元素全部不可被压扁，单行显示 */
   .topbar-nav .btn-nav,
