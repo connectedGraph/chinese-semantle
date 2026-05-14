@@ -8,7 +8,7 @@
       "config": {
         "maxLambdaSize": "250mb",
         "runtime": "python3.11",
-        "includeFiles": "backend/**"
+        "includeFiles": "backend/{app/**,data/precomputed/**,data/daily_challenges.yaml,data/daily_pool.txt}"
       }
     },
     {

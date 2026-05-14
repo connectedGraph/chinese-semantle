@@ -1,5 +1,5 @@
 # Vercel 运行时依赖（精简版，不含 gensim/numpy）
-# 本地开发请用 backend/requirements.txt 安装完整依赖
+# 本地开发请用 backend/requirements-local.txt 安装完整依赖
 
 fastapi==0.115.0
 pydantic==2.9.2
