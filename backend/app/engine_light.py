@@ -81,9 +81,23 @@ class LightEngine:
     def load(cls, db_path: Optional[Path] = None) -> "LightEngine":
         path = db_path or NEIGHBORS_DB
         if not path.exists():
+            # 增强诊断：列出 PRECOMPUTED_DIR 实际内容，帮助定位 Vercel 部署问题
+            parent_listing: List[str] = []
+            data_listing: List[str] = []
+            try:
+                if PRECOMPUTED_DIR.exists():
+                    parent_listing = sorted(p.name for p in PRECOMPUTED_DIR.iterdir())
+                if DATA_DIR.exists():
+                    data_listing = sorted(p.name for p in DATA_DIR.iterdir())
+            except Exception:  # noqa: BLE001
+                pass
             raise FileNotFoundError(
-                f"Precomputed neighbors database not found: {path}.\n"
-                f"Run `python -m scripts.build_precomputed` to generate it."
+                f"Precomputed neighbors database not found: {path}\n"
+                f"  PRECOMPUTED_DIR exists={PRECOMPUTED_DIR.exists()}, "
+                f"contents={parent_listing}\n"
+                f"  DATA_DIR exists={DATA_DIR.exists()}, contents={data_listing}\n"
+                f"  Run `python -m scripts.build_precomputed` to generate it (local), "
+                f"or check includeFiles in vercel.json (deploy)."
             )
         return cls(path)
 
