@@ -25,12 +25,12 @@ LightEngine —— 不加载词向量的轻量引擎，仅基于离线预计算�
 
 LightEngine 接口语义
 --------------------
-- 不同于 LocalEngine 的"全词表":LightEngine 的 vocab 是「所有谜底的 Top-1000 邻居并集」
-- has(word)：词是否在 *某个* 谜底的 Top-1000 内
+- 不同于 LocalEngine 的"全词表":LightEngine 的 vocab 是「所有谜底的 Top-K 邻居并集」
+- has(word)：词是否在 *某个* 谜底的 Top-K 内
 - similarity(target, word)：仅当 (target, word) 在 target 的邻居表中才返回真实相似度；否则返回 -1.0
 - top_k(target, k)：仅对预计算过的谜底有效；对未知词返回 []
 - random_word：从 puzzles.target 中随机抽
-- is_common：固定 False（高频池由 LocalEngine 维护，离线构建时已在选词阶段过滤）
+- is_common：查询高频日常词白名单（target_words.txt），用于提示词去专名 / 去生僻字
 """
 
 from __future__ import annotations
@@ -50,6 +50,8 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 PRECOMPUTED_DIR = DATA_DIR / "precomputed"
 NEIGHBORS_DB = PRECOMPUTED_DIR / "neighbors.sqlite"
+# 高频日常词白名单：用于 is_common() 查询，过滤"畦/舂"这种长尾生僻字
+TARGET_WORDS_FILE = DATA_DIR / "target_words.txt"
 
 
 class LightEngine:
@@ -115,11 +117,14 @@ class LightEngine:
         # 缓存所有邻居词的并集（用于 has() 检查）
         # 一次性把所有 blob 都解压一遍，构建全局已知词集
         self._known_words: set = self._load_known_words()
+        # 加载高频日常词白名单（target_words.txt），供 is_common() 查询
+        # 用于 game.py 里的提示词选词，避免「畦/舂/蔗」这种长尾生僻字
+        self._common_pool: set = self._load_common_pool()
         logger.info(
             "LightEngine ready: %d puzzles, %d known words in neighbor union, "
-            "%d puzzles cached.",
+            "%d common words, %d puzzles cached.",
             len(self._target_words), len(self._known_words),
-            len(self._neighbors_cache),
+            len(self._common_pool), len(self._neighbors_cache),
         )
 
     # ---- 装载 ----
@@ -153,8 +158,8 @@ class LightEngine:
     def _load_known_words(self) -> set:
         """启动时扫描所有 blob，构建全局已知词集。同时缓存解压后的邻居字典。
 
-        注意：这一步把所有 1781 个 blob 解压并装内存。
-        实测 ~80MB 内存占用、~3 秒耗时（lambda cold start 友好）。
+        注意：这一步把所有谜底的 blob 解压并装内存。
+        Top-1000 时约 ~80MB 内存，Top-3000 约 ~240MB（lambda 默认 1024MB 内存够用）。
         """
         known: set = set()
         cur = self._conn.execute("SELECT code, neighbors FROM puzzles")
@@ -178,6 +183,36 @@ class LightEngine:
             self._neighbors_list_cache[code] = ordered
         return known
 
+    def _load_common_pool(self) -> set:
+        """加载高频日常词白名单。target_words.txt 由 build_wordlist.py 生成；
+        约 1781 词，~16KB，加载几乎无成本。
+
+        - 文件格式：每行一词（可有 \\t频\\t词性 后缀，只取首列）
+        - 注释行以 # 开头跳过
+        - 文件缺失时返回空集合 → is_common() 恒 False，相当于无高频池兜底
+        """
+        if not TARGET_WORDS_FILE.exists():
+            logger.warning(
+                "Common pool file not found: %s. is_common() will always return False; "
+                "hint words may include rare characters. "
+                "Run scripts/build_wordlist.py to regenerate.",
+                TARGET_WORDS_FILE,
+            )
+            return set()
+        pool: set = set()
+        try:
+            with TARGET_WORDS_FILE.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    w = line.split("\t", 1)[0].split()[0].strip()
+                    if w:
+                        pool.add(w)
+        except OSError as e:
+            logger.error("Failed to load common pool %s: %s", TARGET_WORDS_FILE, e)
+        return pool
+
     # ---- EngineProtocol 实现 ----
 
     def has(self, word: str) -> bool:
@@ -187,12 +222,15 @@ class LightEngine:
         return word in self._known_words or word in self._target_words
 
     def is_common(self, word: str) -> bool:
-        # 高频池信息在离线构建时已用于"选词"阶段，运行时无需再判断
-        return False
+        """词是否在高频日常词池内（target_words.txt）。
+        用于 game.py 的提示词选词，让提示偏好"猪肉"而不是"豕"。
+        """
+        return word in self._common_pool
 
     @property
     def has_target_pool(self) -> bool:
-        return False
+        """启用时返回 True，让 game.py 走双通道（高频池优先）选词。"""
+        return bool(self._common_pool)
 
     def similarity(self, w1: str, w2: str) -> float:
         """

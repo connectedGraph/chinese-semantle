@@ -447,11 +447,11 @@ function renderRow(r, { pinned = false } = {}) {
     ? `#${r.proximity_rank}`
     : "—";
 
-  // 相似度展示：cold 档（不在 Top-1000 内）的 similarity_pct 在线上 LightEngine
+  // 相似度展示：cold 档（不在 Top-K 内）的 similarity_pct 在线上 LightEngine
   // 下没有词向量可算，固定返回 -100；本地 LocalEngine 会返回真实的低正数。
-  // 统一处理：负数（离题）一律显示"远"，避免给玩家 -100 这种困惑数字。
+  // 统一处理：负数（离题，无法算精确相似度）显示"低相似度"，避免给玩家 -100 这种困惑数字。
   const pctDisplay =
-    r.similarity_pct < 0 ? "远" : r.similarity_pct.toFixed(2);
+    r.similarity_pct < 0 ? "低相似度" : r.similarity_pct.toFixed(2);
 
   const playerBadge = r.player_name
     ? `<span class="player">${escapeHtml(r.player_name)}</span>`
