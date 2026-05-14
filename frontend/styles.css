@@ -58,6 +58,8 @@ html, body {
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 防止 iOS 横向滚动 + 子元素负 margin 等情况撑出视口 */
+  overflow-x: hidden;
 }
 
 button {
@@ -76,6 +78,11 @@ input {
   max-width: var(--max-w);
   margin: 0 auto;
   padding: 32px 20px 80px;
+  /* 处理 iOS Safari 的 safe-area（notch/灵动岛 / 横屏底栏），
+   * 优先尊重 safe-area，至少保证 20px 左右内边距。
+   */
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
 }
 
 /* ---------- topbar ---------- */
@@ -90,19 +97,51 @@ input {
   flex-wrap: wrap;
 }
 
+/* ---------- gameinfo bar（topbar 下方独立一行：当前游戏的元信息） ---------- */
+
+.gameinfo-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.gameinfo-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.gameinfo-mode::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+
+.gameinfo-mode.is-random::before { background: var(--accent); }
+.gameinfo-mode.is-daily::before  { background: #10b981; }
+.gameinfo-mode.is-shared::before { background: #6366f1; }
+
+/* puzzle-badge 推到 gameinfo-bar 最右侧 */
+.gameinfo-bar .puzzle-badge {
+  margin-left: auto;
+}
+
 .brand {
   display: flex;
   align-items: baseline;
   gap: 10px;
-}
-
-.brand-mark {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--accent);
-  display: inline-block;
-  transform: translateY(-2px);
 }
 
 .brand h1 {
@@ -900,6 +939,10 @@ input {
   transform: translateY(-4px);
   transition: opacity 0.15s, transform 0.15s;
   z-index: 50;
+  /* 确保长文本在容器内强制换行，不溢出 */
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 .scoring-tooltip::before {
   content: "";
@@ -1140,7 +1183,12 @@ body.modal-open { overflow: hidden; }
 /* ---------- responsive ---------- */
 
 @media (max-width: 540px) {
-  .app { padding: 20px 14px 60px; }
+  .app {
+    /* 窄屏：进一步压缩左右内边距，让卡片接近贴边，更利用屏幕空间 */
+    padding: 20px 12px 60px;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+  }
   .history-row {
     grid-template-columns: 28px 1fr 60px 80px 48px;
     gap: 8px;
@@ -1149,8 +1197,10 @@ body.modal-open { overflow: hidden; }
 
   /* ---- 窄屏 topbar 重排 ----
    * 设计意图：两行布局，避免任何单个元素被挤压成竖排或多行。
-   *   行 1：品牌 logo（左）  +  新建随机游戏 按钮（右，主 CTA）
-   *   行 2：编号徽章 · 计分徽章 · 每日挑战 · 回溯（次要操作集合）
+   *   行 1：品牌 logo（左）  +  随机计分游戏 按钮（右，主 CTA）
+   *   行 2：每日挑战 · 回溯 · 出题（次要操作集合）
+   * 当前游戏的 mode / scoring / puzzle_code 徽章在独立的 .gameinfo-bar 中，
+   * 不再受 topbar 排版影响。
    */
   .topbar {
     gap: 12px 8px;
@@ -1174,16 +1224,17 @@ body.modal-open { overflow: hidden; }
     margin-left: auto;     /* 推到 topbar 第 1 行最右 */
   }
   /* 次要元素全部不可被压扁，单行显示 */
-  .puzzle-badge,
-  .scoring-badge,
   .topbar-nav .btn-nav,
+  #custom-puzzle-btn,
   #new-game-btn {
     flex-shrink: 0;
     white-space: nowrap;
   }
-  .puzzle-badge { margin-right: 0; padding: 3px 8px; }
-  .puzzle-badge-label { display: none; }
   .topbar-nav { gap: 4px; }
+
+  /* gameinfo-bar 在窄屏上同样保持单行可换行；编号徽章去 label 节省横向空间 */
+  .puzzle-badge { padding: 3px 8px; }
+  .puzzle-badge-label { display: none; }
 
   .scoring-tooltip {
     right: auto;

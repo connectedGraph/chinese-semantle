@@ -24,6 +24,7 @@ const $ = (id) => document.getElementById(id);
 const els = {
   // topbar
   newGameBtn:    $("new-game-btn"),
+  customPuzzleBtn: $("custom-puzzle-btn"),
   dailyBtn:      $("daily-btn"),
   calendarBtn:   $("calendar-btn"),
   dailyNewDot:   $("daily-new-dot"),
@@ -46,7 +47,9 @@ const els = {
   finishHintText:$("finish-hint-text"),
   finishRestart: $("finish-restart"),
 
-  // badges
+  // gameinfo bar（topbar 下方独立一行）
+  gameinfoBar:    $("gameinfo-bar"),
+  gameinfoMode:   $("gameinfo-mode"),
   puzzleBadge:    $("puzzle-badge"),
   puzzleBadgeCode:$("puzzle-badge-code"),
   shareBtn:       $("share-btn"),
@@ -60,6 +63,7 @@ const els = {
 
   // leaderboard
   leaderboardCard:    $("leaderboard-card"),
+  leaderboardDetails: $("leaderboard-details"),
   leaderboardMeta:    $("leaderboard-meta"),
   leaderboardModeTip: $("leaderboard-mode-tip"),
   leaderboardList:    $("leaderboard-list"),
@@ -266,10 +270,43 @@ function updateHintQuota() {
 function renderPuzzleBadge() {
   if (!state.currentGame || !state.currentGame.puzzle_code) {
     els.puzzleBadge.hidden = true;
+    renderGameinfoBar();
     return;
   }
   els.puzzleBadge.hidden = false;
   els.puzzleBadgeCode.textContent = state.currentGame.puzzle_code;
+  renderGameinfoBar();
+}
+
+/**
+ * 渲染当前游戏的「模式标签」 + 控制 gameinfo-bar 整体显隐。
+ * gameinfo-bar 在 topbar 下方独立一行，集中展示：模式 → 计分状态 → 谜底编号。
+ *
+ * 模式标签文案：
+ *   - random : 随机游戏
+ *   - daily  : 每日挑战 (附 YYYY-MM-DD)
+ *   - shared : 分享对局
+ */
+function renderGameinfoBar() {
+  if (!state.currentGame) {
+    els.gameinfoBar.hidden = true;
+    return;
+  }
+  els.gameinfoBar.hidden = false;
+
+  const src = state.currentGame.source;
+  let label = "";
+  if (src === "daily") {
+    const d = state.currentGame.daily_date;
+    label = d ? `每日挑战 · ${d}` : "每日挑战";
+  } else if (src === "shared") {
+    label = "分享对局";
+  } else {
+    label = "随机游戏";
+  }
+  els.gameinfoMode.textContent = label;
+  els.gameinfoMode.classList.remove("is-random", "is-daily", "is-shared");
+  els.gameinfoMode.classList.add(`is-${src || "random"}`);
 }
 
 /** 计算并渲染「计分 / 非计分」徽章。**单一真相来源**：state. */
@@ -589,11 +626,12 @@ async function loadLeaderboard(code) {
     renderLeaderboard(data);
   } catch (err) {
     console.warn("Leaderboard load failed:", err.message);
-    // 失败时仍展示空面板 + mode-tip
+    // 失败时仍展示空面板 + mode-tip，但默认折叠（无内容时不抢视觉）
     els.leaderboardCard.hidden = false;
     els.leaderboardList.innerHTML = "";
     els.leaderboardEmpty.hidden = false;
     els.leaderboardMeta.textContent = "";
+    if (els.leaderboardDetails) els.leaderboardDetails.open = false;
   }
   refreshScoringUI();
 }
@@ -608,7 +646,13 @@ function renderLeaderboard(data) {
     els.leaderboardMeta.textContent = "";
   }
 
-  if (!data.entries || data.entries.length === 0) {
+  const isEmpty = !data.entries || data.entries.length === 0;
+  // 空排行榜默认折叠（无内容时不抢视觉），有数据时展开
+  if (els.leaderboardDetails) {
+    els.leaderboardDetails.open = !isEmpty;
+  }
+
+  if (isEmpty) {
     els.leaderboardEmpty.hidden = false;
     return;
   }
@@ -1026,6 +1070,12 @@ function init() {
   els.newGameBtn.addEventListener("click", () => startNewGame({ mode: "random" }));
   els.dailyBtn.addEventListener("click", goToToday);
   els.calendarBtn.addEventListener("click", openCalendar);
+  // 「出题」按钮：自定义出题，功能待定
+  if (els.customPuzzleBtn) {
+    els.customPuzzleBtn.addEventListener("click", () => {
+      setStatus("「出题」功能正在开发中，敬请期待。");
+    });
+  }
 
   // 游戏主流程
   els.giveupBtn.addEventListener("click", giveUp);
