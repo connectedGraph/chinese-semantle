@@ -5,3 +5,5 @@ fastapi==0.115.0
 pydantic==2.9.2
 # Postgres 异步驱动（Neon）
 asyncpg==0.29.0
+# 每日挑战配置文件解析
+pyyaml==6.0.2

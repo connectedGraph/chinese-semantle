@@ -529,6 +529,15 @@ input {
   color: var(--accent);
 }
 
+/* 放弃路径：降调为中性灰，避免暖橙喜庆色与"遗憾"语义冲突 */
+.finish-banner.is-give-up {
+  background: var(--bg);
+  border-color: var(--line);
+}
+.finish-title.is-give-up {
+  color: var(--ink-2);
+}
+
 .finish-detail {
   font-size: 14px;
   color: var(--ink-2);
@@ -566,7 +575,6 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-right: 10px;
   padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -596,17 +604,38 @@ input {
 .leaderboard-card {
   margin-top: 14px;
   margin-bottom: 16px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
-.leaderboard-head {
+
+/* 折叠：与 .rules-card 同一交互模式 */
+.leaderboard-summary {
+  list-style: none;
+  cursor: pointer;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  user-select: none;
+  outline: none;
 }
+.leaderboard-summary::-webkit-details-marker { display: none; }
+
+.leaderboard-head-left {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.leaderboard-details[open] .leaderboard-body {
+  margin-top: 10px;
+}
+.leaderboard-details .rules-toggle { transform: rotate(-90deg); }
+.leaderboard-details[open] .rules-toggle { transform: rotate(0deg); }
+
 .leaderboard-title {
   font-size: 13px;
   font-weight: 600;
@@ -723,6 +752,390 @@ input {
   flex-wrap: wrap;
 }
 
+/* ---------- topbar nav (icon buttons) ---------- */
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-nav {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.btn-nav {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0;          /* 按钮内的文本仅作语义/无障碍备用，视觉用 ::before 图标 */
+  border-radius: 8px;
+}
+
+.btn-nav::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* 「每日挑战」图标：日历 + 中心圆点（暗示「今日」） */
+#daily-btn::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 9h18'/><path d='M8 3v4M16 3v4'/><circle cx='12' cy='14' r='2' fill='black' stroke='none'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 9h18'/><path d='M8 3v4M16 3v4'/><circle cx='12' cy='14' r='2' fill='black' stroke='none'/></svg>");
+}
+
+/* 「回溯」图标：逆时针时钟箭头 */
+#calendar-btn::before {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 3-6.7'/><polyline points='3 4 3 10 9 10'/><polyline points='12 7 12 12 15 14'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 12a9 9 0 1 0 3-6.7'/><polyline points='3 4 3 10 9 10'/><polyline points='12 7 12 12 15 14'/></svg>");
+}
+
+/* 日历 nav 中的「‹ ›」用文字而非 mask */
+#cal-prev, #cal-next {
+  font-size: 18px;
+  line-height: 1;
+}
+#cal-prev::before, #cal-next::before { display: none; }
+
+.btn-nav:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+/* 红点：新一题已上线 */
+.nav-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* ---------- scoring badge + tooltip ---------- */
+
+.scoring-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 12px;
+  cursor: help;
+  user-select: none;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.scoring-badge:focus-visible {
+  border-color: var(--ink-2);
+}
+.scoring-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  border: 1.5px solid var(--ink-3);
+  box-sizing: border-box;
+  flex: 0 0 8px;
+}
+.scoring-badge.is-scoring .scoring-dot {
+  background: #10b981;
+  border-color: #10b981;
+}
+.scoring-badge.is-not-scoring .scoring-dot {
+  background: transparent;
+  border-color: var(--ink-3);
+}
+.scoring-badge.is-scoring {
+  color: #047857;
+  border-color: #b7e7d4;
+  background: #f0fdf6;
+}
+.scoring-badge.is-not-scoring {
+  color: var(--ink-2);
+}
+
+.scoring-badge-label {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* tooltip：纯 CSS hover 浮层 */
+.scoring-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  padding: 10px 12px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 50;
+}
+.scoring-tooltip::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  background: var(--ink);
+  transform: rotate(45deg);
+}
+.scoring-badge:hover .scoring-tooltip,
+.scoring-badge:focus-visible .scoring-tooltip,
+.scoring-badge:focus-within .scoring-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+.scoring-tooltip-reason {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.scoring-tooltip-rule {
+  display: block;
+  color: rgba(255,255,255,0.78);
+  font-weight: 400;
+}
+
+/* ---------- leaderboard mode tip ---------- */
+
+.leaderboard-mode-tip {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  background: var(--bg);
+  border-radius: 6px;
+  border: 1px dashed var(--line);
+}
+.leaderboard-mode-tip.is-scoring {
+  color: #047857;
+  background: #f0fdf6;
+  border-color: #b7e7d4;
+  border-style: solid;
+}
+.leaderboard-mode-tip:empty { display: none; }
+.lb-tip-primary { display: block; font-weight: 500; }
+.lb-tip-rule {
+  display: block;
+  margin-top: 6px;
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+
+/* ---------- modal (calendar) ---------- */
+
+body.modal-open { overflow: hidden; }
+
+/* hidden 属性优先：覆盖 .modal 的 display: flex */
+.modal[hidden] { display: none !important; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 18, 22, 0.45);
+  backdrop-filter: blur(2px);
+}
+.modal-panel {
+  position: relative;
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.18);
+  width: 100%;
+  max-width: 380px;
+  padding: 18px 18px 16px;
+  z-index: 1;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.modal-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 18px;
+  color: var(--ink-3);
+  line-height: 1;
+}
+.modal-close:hover {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* ---------- calendar ---------- */
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.calendar-month-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.cal-loading.is-error { color: var(--accent); }
+
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  padding: 0;
+}
+.cal-cell:hover:not(:disabled):not(.is-empty) {
+  background: var(--bg);
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+.cal-cell.is-empty {
+  background: transparent;
+  border-color: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+.cal-cell.is-disabled {
+  color: var(--line-strong);
+  background: transparent;
+  border-color: var(--line);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.cal-cell.is-today {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.cal-cell.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.cal-cell.is-played {
+  background: #f0fdf6;
+  border-color: #b7e7d4;
+  color: #047857;
+}
+.cal-cell.is-played.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cal-day { line-height: 1; }
+.cal-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 6px;
+  font-size: 10px;
+  line-height: 1;
+  font-family: var(--font-mono);
+  color: inherit;
+  opacity: 0.9;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 12px 2px 2px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.legend-item { display: inline-flex; align-items: center; gap: 5px; }
+.legend-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.legend-dot.is-today   { border-color: var(--accent); }
+.legend-dot.is-current { background: var(--accent-soft); border-color: var(--accent); }
+.legend-dot.is-played  { background: #f0fdf6; border-color: #b7e7d4; }
+.legend-dot.is-disabled{ background: var(--bg); border-color: var(--line); opacity: 0.6; }
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 540px) {
@@ -735,4 +1148,11 @@ input {
   .topbar-actions input { width: 110px; }
   .puzzle-badge { margin-right: 6px; padding: 3px 8px; }
   .puzzle-badge-label { display: none; }
+  .topbar { gap: 8px; }
+  .topbar-nav { order: 3; flex-basis: 100%; justify-content: flex-start; }
+  .scoring-tooltip {
+    right: auto;
+    left: 0;
+  }
+  .scoring-tooltip::before { right: auto; left: 16px; }
 }

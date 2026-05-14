@@ -25,12 +25,21 @@ import logging
 import random
 import threading
 import uuid
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import date, datetime, timezone
+from typing import Dict, List, Literal, Optional, Tuple
 
 from .engine_base import EngineProtocol
 from .models import GuessRecord, HintWord, ProximityLevel
 from .puzzle_codes import encode_word
+
+
+GameSource = Literal["random", "daily", "shared"]
+"""
+计分判定的唯一依据：
+- random : 通过「新建随机游戏」开局；唯一可计分来源（额外要求未提示、未放弃）
+- daily  : 通过「每日挑战 / 回溯」入口开局；永远不计分
+- shared : 通过 ?game=XXXXXX 链接进入；永远不计分
+"""
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +82,8 @@ class Game:
         top_neighbors: List[Tuple[str, float]],
         hints: List[HintWord],
         puzzle_code: Optional[str] = None,
+        source: GameSource = "random",
+        daily_date: Optional[date] = None,
     ) -> None:
         self.id = game_id
         self.target = target
@@ -89,11 +100,47 @@ class Game:
         self.extra_hint_count: int = 0  # 已使用的手动提示次数
         # 一旦使用过提示，本局成绩永久失去排行榜资格（即使后续不再用，也不能重置）
         self.hint_ever_used: bool = False
+        # 一旦放弃过，本局成绩永久失去排行榜资格
+        self.give_up_ever: bool = False
+        # 来源 / 每日挑战所属日期（仅 source == "daily" 时非空）
+        self.source: GameSource = source
+        self.daily_date: Optional[date] = daily_date
         self._lock = threading.Lock()
 
     @property
     def guess_count(self) -> int:
         return len(self.history)
+
+    @property
+    def is_scoring(self) -> bool:
+        """
+        本局是否计入排行榜。**计分判定的唯一中心**。
+
+        规则：
+            source == "random" AND not hint_ever_used AND not give_up_ever
+        """
+        return (
+            self.source == "random"
+            and not self.hint_ever_used
+            and not self.give_up_ever
+        )
+
+    @property
+    def scoring_reason(self) -> str:
+        """
+        非计分原因（用于前端 hover tooltip 第一段）。
+        计分时返回固定的肯定文案。
+        """
+        if self.is_scoring:
+            return "本局成绩可提交到随机游戏排行榜"
+        # 优先级：分享/每日（来源） > 已使用提示 > 已放弃后继续
+        if self.source != "random":
+            return "非随机游戏"
+        if self.hint_ever_used:
+            return "已使用提示"
+        if self.give_up_ever:
+            return "已放弃后继续猜词"
+        return "非计分局"
 
 
 class GameStore:
@@ -112,12 +159,16 @@ class GameStore:
         min_word_len: int = 2,
         max_word_len: int = 4,
         target_word: Optional[str] = None,
+        source: GameSource = "random",
+        daily_date: Optional[date] = None,
     ) -> Game:
         """
         创建一局游戏。
-        - 若提供 target_word：以指定词作为谜底（用于「按 puzzle_code 进入指定一局」）；
-          需要 engine.has(target_word) 为真，否则抛 ValueError。
+        - 若提供 target_word：以指定词作为谜底（用于「按 puzzle_code 进入指定一局」
+          或「每日挑战」）；需要 engine.has(target_word) 为真，否则抛 ValueError。
         - 否则按长度区间随机抽一个谜底。
+
+        source / daily_date 仅用于排行榜计分判定，不影响游戏玩法本身。
         """
         if target_word:
             if not self.engine.has(target_word):
@@ -125,7 +176,10 @@ class GameStore:
             target = target_word
         else:
             target = self._pick_target(min_word_len, max_word_len)
-        logger.info("New game target picked: %s (len=%d)", target, len(target))
+        logger.info(
+            "New game target picked: %s (len=%d, source=%s, daily=%s)",
+            target, len(target), source, daily_date,
+        )
 
         # 预计算 Top-N 邻居（这一步是 Semantle 体验的关键）
         top_neighbors = self.engine.top_k(target, k=TOP_N)
@@ -137,7 +191,10 @@ class GameStore:
         )
 
         game_id = uuid.uuid4().hex[:12]
-        game = Game(game_id, target, top_neighbors, hints)
+        game = Game(
+            game_id, target, top_neighbors, hints,
+            source=source, daily_date=daily_date,
+        )
 
         with self._lock:
             self._games[game_id] = game

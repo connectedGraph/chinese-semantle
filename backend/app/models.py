@@ -41,14 +41,36 @@ class GuessRecord(BaseModel):
 
 # ---------- 请求 ----------
 
+GameMode = Literal["random", "daily", "shared"]
+"""
+开局来源：
+- random : 系统随机抽签（唯一可计分通道）
+- daily  : 每日挑战 / 回溯（必须提供 daily_date）
+- shared : 通过 puzzle_code 分享链接进入（必须提供 puzzle_code）
+"""
+
+
 class CreateGameRequest(BaseModel):
     hint_count: int = Field(0, ge=0, le=10, description="初始提示词数量（默认不给）")
     min_word_len: int = Field(2, ge=1, le=8)
     max_word_len: int = Field(4, ge=1, le=8)
     puzzle_code: Optional[str] = Field(
         None,
-        description="指定谜底编号开局；为空时随机抽一个谜底",
+        description="指定谜底编号开局；为空时按 mode 处理",
         max_length=16,
+    )
+    mode: GameMode = Field(
+        "random",
+        description=(
+            "开局来源；决定排行榜计分资格。"
+            "默认 random（随机抽签，可计分）。"
+            "传 daily 时需配套 daily_date；传 puzzle_code 时自动视为 shared。"
+        ),
+    )
+    daily_date: Optional[str] = Field(
+        None,
+        description="每日挑战日期 YYYY-MM-DD（CN 时区），mode=daily 时必填",
+        max_length=10,
     )
 
 
@@ -89,6 +111,12 @@ class GameSummary(BaseModel):
     hints: List[HintWord]
     history: List[GuessRecord]
     target: Optional[str] = Field(None, description="仅在游戏结束/放弃后返回")
+    source: GameMode = Field("random", description="本局来源")
+    daily_date: Optional[str] = Field(None, description="每日挑战日期，仅 source=daily 时返回")
+    is_scoring: bool = Field(True, description="本局当前是否计分")
+    scoring_reason: str = Field("", description="计分/非计分原因")
+    hint_ever_used: bool = False
+    give_up_ever: bool = False
 
 
 class CreateGameResponse(BaseModel):
@@ -97,6 +125,10 @@ class CreateGameResponse(BaseModel):
     hints: List[HintWord]
     target_length: int = Field(..., description="答案的字数（用于在 UI 展示，避免猜超长词）")
     created_at: datetime
+    source: GameMode = Field("random", description="本局来源（决定计分资格）")
+    daily_date: Optional[str] = Field(None, description="每日挑战日期，仅 source=daily 时返回")
+    is_scoring: bool = Field(True, description="本局当前是否计分（与 source / 提示 / 放弃综合判定）")
+    scoring_reason: str = Field("", description="计分/非计分的具体原因（前端 hover tooltip 第一段）")
 
 
 class GuessResponse(BaseModel):
@@ -145,3 +177,27 @@ class PuzzlePeekResponse(BaseModel):
     puzzle_code: str
     target_length: int
     exists: bool
+
+
+# ---------- 每日挑战 ----------
+
+class DailyTodayResponse(BaseModel):
+    date: str = Field(..., description="今日日期，YYYY-MM-DD（Asia/Shanghai）")
+    puzzle_code: str = Field(..., description="今日谜底对应的 puzzle_code")
+    target_length: int
+
+
+class DailyCalendarItem(BaseModel):
+    date: str = Field(..., description="YYYY-MM-DD")
+    is_published: bool = Field(..., description="是否已发布（在 [DAILY_LAUNCH_DATE, today] 内）")
+    is_today: bool = Field(False, description="是否就是今日")
+    puzzle_code: Optional[str] = Field(
+        None,
+        description="已发布日期的谜底编号（用于前端跳转 ?daily= 或 ?game=）；未发布为 null",
+    )
+
+
+class DailyCalendarResponse(BaseModel):
+    today: str
+    launch_date: str
+    items: List[DailyCalendarItem]

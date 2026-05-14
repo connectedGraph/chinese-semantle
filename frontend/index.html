@@ -10,17 +10,42 @@
   <main class="app">
 
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark"></span>
-        <h1>猜词</h1>
-        <span class="brand-sub">Chinese Semantle</span>
+      <div class="topbar-left">
+        <div class="brand">
+          <span class="brand-mark"></span>
+          <h1>猜词</h1>
+          <span class="brand-sub">Chinese Semantle</span>
+        </div>
       </div>
+
       <div class="topbar-actions">
         <span id="puzzle-badge" class="puzzle-badge" hidden title="谜底编号 · 点击复制分享链接">
           <span class="puzzle-badge-label">编号</span>
           <span id="puzzle-badge-code" class="puzzle-badge-code">------</span>
         </span>
-        <button id="new-game-btn" class="btn btn-primary">新游戏</button>
+        <span
+          id="scoring-badge"
+          class="scoring-badge"
+          hidden
+          tabindex="0"
+          aria-describedby="scoring-tooltip"
+        >
+          <span class="scoring-dot" aria-hidden="true"></span>
+          <span id="scoring-badge-label" class="scoring-badge-label">计分局</span>
+          <span id="scoring-tooltip" class="scoring-tooltip" role="tooltip">
+            <span id="scoring-tooltip-reason" class="scoring-tooltip-reason"></span>
+            <span class="scoring-tooltip-rule">为保证公平性，排行榜仅对随机游戏开放，且不支持提示、放弃后重新猜词。每日挑战、通过链接分享进入、使用提示、重新开局等情况，均不计入排行榜。</span>
+          </span>
+        </span>
+        <nav class="topbar-nav">
+          <button id="daily-btn" class="btn btn-ghost btn-nav" type="button" title="今日每日挑战">
+            每日挑战<span id="daily-new-dot" class="nav-dot" hidden title="新一题已上线"></span>
+          </button>
+          <button id="calendar-btn" class="btn btn-ghost btn-nav" type="button" title="回溯历史每日挑战">
+            回溯
+          </button>
+        </nav>
+        <button id="new-game-btn" class="btn btn-primary">新建随机游戏</button>
       </div>
     </header>
 
@@ -47,14 +72,22 @@
       </details>
 
       <section id="leaderboard-card" class="leaderboard-card" hidden>
-        <div class="leaderboard-head">
-          <span class="leaderboard-title">本局排行榜</span>
-          <span id="leaderboard-meta" class="leaderboard-meta"></span>
-        </div>
-        <ol id="leaderboard-list" class="leaderboard-list"></ol>
-        <p id="leaderboard-empty" class="leaderboard-empty" hidden>
-          还没有人通关本局，成为第一个吧。
-        </p>
+        <details class="leaderboard-details" open>
+          <summary class="leaderboard-summary">
+            <span class="leaderboard-head-left">
+              <span class="leaderboard-title">本局排行榜</span>
+              <span id="leaderboard-meta" class="leaderboard-meta"></span>
+            </span>
+            <span class="rules-toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="leaderboard-body">
+            <p id="leaderboard-mode-tip" class="leaderboard-mode-tip"></p>
+            <ol id="leaderboard-list" class="leaderboard-list"></ol>
+            <p id="leaderboard-empty" class="leaderboard-empty" hidden>
+              还没有人通关本局，成为第一个吧。
+            </p>
+          </div>
+        </details>
       </section>
 
       <form id="guess-form" class="guess-form" autocomplete="off">
@@ -82,9 +115,9 @@
     </section>
 
     <section id="finish-banner" class="finish-banner" hidden>
-      <p class="finish-title">恭喜，答对了！</p>
+      <p id="finish-title" class="finish-title">恭喜，答对了！</p>
       <p class="finish-detail">
-        答案是 <strong id="finish-target"></strong>，你猜了 <strong id="finish-count"></strong> 次<span id="finish-hint-text"></span>
+        答案是 <strong id="finish-target"></strong><span id="finish-detail-rest">，你猜了 <strong id="finish-count"></strong> 次<span id="finish-hint-text"></span></span>
       </p>
 
       <div id="submit-score-box" class="submit-score-box" hidden>
@@ -129,6 +162,32 @@
       <a id="api-docs-link" href="/docs" target="_blank" rel="noopener noreferrer">API 文档</a>
     </footer>
   </main>
+
+  <!-- 日历回溯弹窗 -->
+  <div id="calendar-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="calendar-title">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel calendar-panel" role="document">
+      <header class="modal-head">
+        <h2 id="calendar-title" class="modal-title">回溯每日挑战</h2>
+        <button class="modal-close" type="button" data-close-modal aria-label="关闭">×</button>
+      </header>
+      <div class="calendar-nav">
+        <button id="cal-prev" class="btn btn-ghost btn-nav" type="button" aria-label="上一月">‹</button>
+        <span id="cal-month-label" class="calendar-month-label">—</span>
+        <button id="cal-next" class="btn btn-ghost btn-nav" type="button" aria-label="下一月">›</button>
+      </div>
+      <div class="calendar-weekdays" aria-hidden="true">
+        <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+      </div>
+      <div id="cal-grid" class="calendar-grid" role="grid"></div>
+      <p class="calendar-legend">
+        <span class="legend-item"><span class="legend-dot is-today"></span>今日</span>
+        <span class="legend-item"><span class="legend-dot is-current"></span>当前对局</span>
+        <span class="legend-item"><span class="legend-dot is-played"></span>已挑战</span>
+        <span class="legend-item"><span class="legend-dot is-disabled"></span>未发布</span>
+      </p>
+    </div>
+  </div>
 
   <script src="./app.js"></script>
 </body>

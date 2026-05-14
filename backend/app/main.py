@@ -41,6 +41,9 @@ from .leaderboard.tokens import make_payload
 from .models import (
     CreateGameRequest,
     CreateGameResponse,
+    DailyCalendarItem,
+    DailyCalendarResponse,
+    DailyTodayResponse,
     GameSummary,
     GuessRequest,
     GuessResponse,
@@ -51,7 +54,8 @@ from .models import (
     SubmitScoreRequest,
     SubmitScoreResponse,
 )
-from .puzzle_codes import decode_code
+from .puzzle_codes import decode_code, encode_word
+from . import daily as daily_mod
 
 logging.basicConfig(
     level=logging.INFO,
@@ -118,10 +122,10 @@ def _ensure_game(game_id: str):
 
 
 def _maybe_issue_submit_token(game) -> Optional[str]:
-    """猜中谜底 + 本局从未用过提示，才下发 token。"""
+    """**计分判定中心**：仅 source=='random' 且未用提示、未放弃过的局可下发 token。"""
     if not game.is_finished:
         return None
-    if game.hint_ever_used:
+    if not game.is_scoring:
         return None
     payload = make_payload(
         puzzle_code=game.puzzle_code,
@@ -129,6 +133,39 @@ def _maybe_issue_submit_token(game) -> Optional[str]:
         game_id=game.id,
     )
     return issue_submit_token(payload)
+
+
+def _to_summary(game) -> GameSummary:
+    return GameSummary(
+        game_id=game.id,
+        puzzle_code=game.puzzle_code,
+        created_at=game.created_at,
+        is_finished=game.is_finished,
+        guess_count=game.guess_count,
+        hints=game.hints,
+        history=game.history,
+        target=game.target if game.is_finished else None,
+        source=game.source,
+        daily_date=game.daily_date.isoformat() if game.daily_date else None,
+        is_scoring=game.is_scoring,
+        scoring_reason=game.scoring_reason,
+        hint_ever_used=game.hint_ever_used,
+        give_up_ever=game.give_up_ever,
+    )
+
+
+def _to_create_response(game) -> CreateGameResponse:
+    return CreateGameResponse(
+        game_id=game.id,
+        puzzle_code=game.puzzle_code,
+        hints=game.hints,
+        target_length=len(game.target),
+        created_at=game.created_at,
+        source=game.source,
+        daily_date=game.daily_date.isoformat() if game.daily_date else None,
+        is_scoring=game.is_scoring,
+        scoring_reason=game.scoring_reason,
+    )
 
 
 # ------- 路由：根 / 健康 -------
@@ -219,18 +256,51 @@ def health():
 def create_game(req: CreateGameRequest = CreateGameRequest()):
     """
     创建一局游戏。
-    - 不传 `puzzle_code`：随机开一局
-    - 传 `puzzle_code`：以指定编号对应的谜底开一局（用于分享 URL 进入）
+
+    **来源 (source) 决定排行榜计分资格**：
+    - `mode="random"`（默认）：随机抽签，**唯一可计分通道**
+    - `mode="daily"` + `daily_date=YYYY-MM-DD`：每日挑战；不计分
+    - 传 `puzzle_code`：分享链接进入；自动 `source="shared"`，不计分
+
+    优先级：`puzzle_code` > `mode=daily` > `mode=random`。
     """
     if req.min_word_len > req.max_word_len:
         raise HTTPException(400, "min_word_len 不能大于 max_word_len")
 
     target_word: Optional[str] = None
+    source: str = "random"
+    daily_date_obj = None
+
     if req.puzzle_code:
+        # 分享链接 / 直接按 code 进入：一律 shared
         code = req.puzzle_code.upper().strip()
         target_word = decode_code(code)
         if not target_word:
             raise HTTPException(404, f"未知的 puzzle_code: {code}")
+        source = "shared"
+    elif req.mode == "daily":
+        # 每日挑战
+        if not req.daily_date:
+            raise HTTPException(400, "mode=daily 必须提供 daily_date")
+        d = daily_mod.parse_date(req.daily_date)
+        if d is None:
+            raise HTTPException(400, f"daily_date 格式应为 YYYY-MM-DD: {req.daily_date}")
+        if not daily_mod.is_published(d):
+            raise HTTPException(
+                400,
+                f"日期 {d.isoformat()} 不在可挑战范围（"
+                f"{daily_mod.DAILY_LAUNCH_DATE.isoformat()} ~ "
+                f"{daily_mod.cn_today().isoformat()}）",
+            )
+        target_word = daily_mod.target_for(d)
+        if not target_word:
+            raise HTTPException(500, f"无法为日期 {d.isoformat()} 生成谜底（词池为空？）")
+        source = "daily"
+        daily_date_obj = d
+    elif req.mode == "shared":
+        # mode=shared 但没传 puzzle_code，回落为随机（防御）
+        source = "random"
+    # else: mode == "random"
 
     try:
         game = store.create_game(
@@ -238,17 +308,13 @@ def create_game(req: CreateGameRequest = CreateGameRequest()):
             min_word_len=req.min_word_len,
             max_word_len=req.max_word_len,
             target_word=target_word,
+            source=source,  # type: ignore[arg-type]
+            daily_date=daily_date_obj,
         )
     except ValueError as e:
         raise HTTPException(422, str(e))
 
-    return CreateGameResponse(
-        game_id=game.id,
-        puzzle_code=game.puzzle_code,
-        hints=game.hints,
-        target_length=len(game.target),
-        created_at=game.created_at,
-    )
+    return _to_create_response(game)
 
 
 @app.get(
@@ -264,16 +330,7 @@ def create_game_by_code(puzzle_code: str):
 @app.get("/api/games/{game_id}", response_model=GameSummary, tags=["game"])
 def get_game(game_id: str):
     game = _ensure_game(game_id)
-    return GameSummary(
-        game_id=game.id,
-        puzzle_code=game.puzzle_code,
-        created_at=game.created_at,
-        is_finished=game.is_finished,
-        guess_count=game.guess_count,
-        hints=game.hints,
-        history=game.history,
-        target=game.target if game.is_finished else None,
-    )
+    return _to_summary(game)
 
 
 @app.post("/api/games/{game_id}/guess", response_model=GuessResponse, tags=["game"])
@@ -285,7 +342,8 @@ def guess(game_id: str, req: GuessRequest):
     - `player_name` 可选，会写入 history 中的对应记录
     - 一局游戏支持多个玩家协作猜词，最终成绩归属由调用方约定（一般是触发猜中的玩家）
 
-    若猜中且本局从未使用提示，响应里会附带 `submit_token`，用于排行榜提交。
+    若猜中且本局**仍处于计分状态**（source=random 且未用提示、未放弃），响应里会附带
+    `submit_token`，用于排行榜提交。
     """
     game = _ensure_game(game_id)
     if game.is_finished:
@@ -306,18 +364,11 @@ def guess(game_id: str, req: GuessRequest):
 
 @app.post("/api/games/{game_id}/giveup", response_model=GameSummary, tags=["game"])
 def give_up(game_id: str):
+    """放弃本局（看到答案）。会同时打上 `give_up_ever=True`，永久失去排行榜资格。"""
     game = _ensure_game(game_id)
+    game.give_up_ever = True
     game.is_finished = True
-    return GameSummary(
-        game_id=game.id,
-        puzzle_code=game.puzzle_code,
-        created_at=game.created_at,
-        is_finished=True,
-        guess_count=game.guess_count,
-        hints=game.hints,
-        history=game.history,
-        target=game.target,
-    )
+    return _to_summary(game)
 
 
 @app.post("/api/games/{game_id}/hint", response_model=RequestHintResponse, tags=["game"])
@@ -362,6 +413,72 @@ def peek_puzzle(puzzle_code: str):
         return PuzzlePeekResponse(puzzle_code=code, target_length=0, exists=False)
     return PuzzlePeekResponse(
         puzzle_code=code, target_length=len(target), exists=True
+    )
+
+
+# ------- 路由：每日挑战 -------
+
+@app.get("/api/daily/today", response_model=DailyTodayResponse, tags=["daily"])
+def daily_today():
+    """
+    获取「今日」每日挑战的元信息（CN 时区 UTC+8）。
+    前端首页若 URL 无参，会调用此接口并跳转到 ?daily=YYYY-MM-DD。
+    """
+    today = daily_mod.cn_today()
+    target = daily_mod.target_for(today)
+    if not target:
+        raise HTTPException(500, "今日每日挑战暂不可用（词池为空？）")
+    code = encode_word(target)
+    return DailyTodayResponse(
+        date=today.isoformat(),
+        puzzle_code=code,
+        target_length=len(target),
+    )
+
+
+@app.get(
+    "/api/daily/calendar",
+    response_model=DailyCalendarResponse,
+    tags=["daily"],
+)
+def daily_calendar(
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+):
+    """
+    获取一段日期的每日挑战日历。
+    - `start` / `end`：YYYY-MM-DD（CN 时区），缺省取「本月 1 号 ~ 今天 + 14 天」
+    - 自动收敛到 `[DAILY_LAUNCH_DATE, today + 30]` 范围内
+    - **不返回谜底文字**，只返回日期可挑战状态 + puzzle_code（已发布的日期）
+
+    返回字段说明：
+    - `is_published`：该日是否已发布（DAILY_LAUNCH_DATE ≤ d ≤ today）
+    - `is_today`：是否就是今日
+    - `puzzle_code`：已发布日期的谜底编号；未发布日期为 null
+    """
+    today = daily_mod.cn_today()
+    s = daily_mod.parse_date(start) if start else None
+    e = daily_mod.parse_date(end) if end else None
+    items = daily_mod.calendar_range(start=s, end=e, today=today)
+
+    out: list[DailyCalendarItem] = []
+    for it in items:
+        code: Optional[str] = None
+        if it.is_published:
+            target = daily_mod.target_for(it.date)
+            if target:
+                code = encode_word(target)
+        out.append(DailyCalendarItem(
+            date=it.date.isoformat(),
+            is_published=it.is_published,
+            is_today=(it.date == today),
+            puzzle_code=code,
+        ))
+
+    return DailyCalendarResponse(
+        today=today.isoformat(),
+        launch_date=daily_mod.DAILY_LAUNCH_DATE.isoformat(),
+        items=out,
     )
 
 

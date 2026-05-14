@@ -18,9 +18,12 @@ import random
 import threading
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
-from gensim.models import KeyedVectors
+# gensim 是 LocalEngine 的硬依赖，但本地 dev 机器上可能没有；
+# 改为惰性导入：仅在 _load_engine 被实际调用时才 import，
+# 这样 _MockEngine 在缺 gensim 时也能用作 fallback。
+KeyedVectors: Any = None  # 延后赋值
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,7 @@ TARGET_POOL_FILE = "target_words.txt"
 class WordVectorEngine:
     """中文词向量引擎。"""
 
-    def __init__(self, kv: KeyedVectors) -> None:
+    def __init__(self, kv: Any) -> None:
         self._kv = kv
         # 缓存全部词表（玩家猜词路径仍使用全词表）
         self._all_words: List[str] = list(kv.key_to_index.keys())
@@ -199,6 +202,12 @@ def _load_engine() -> WordVectorEngine:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     binary_path = DATA_DIR / BINARY_CACHE
 
+    # 惰性导入 gensim：缺依赖时让上层 fallback 到 MockEngine
+    global KeyedVectors
+    if KeyedVectors is None:
+        from gensim.models import KeyedVectors as _KV  # noqa: F401  type: ignore
+        KeyedVectors = _KV
+
     # 优先加载二进制缓存
     if binary_path.exists():
         logger.info("Loading binary cache: %s", binary_path)
@@ -247,32 +256,45 @@ def _find_raw_file() -> Optional[Path]:
 
 class _MockEngine(WordVectorEngine):
     """
-    无词向量文件时的 mock 引擎，仅用于本地联调前端。
+    无词向量文件 / 缺 gensim 时的 mock 引擎，仅用于本地联调前端。
     用 hash 模拟相似度，可以让接口跑起来但分数无意义。
     """
 
     def __init__(self) -> None:
-        # 内置一个小词表用于演示
+        # 内置一个小词表用于演示。**必须包含 daily_challenges.yaml 中配置的所有词**，
+        # 否则本地 dev 跑每日挑战会因 engine.has() 返回 False 而创建失败。
         self._mock_vocab = [
+            # 食物
             "苹果", "香蕉", "橘子", "葡萄", "西瓜", "草莓", "菠萝", "芒果",
+            "米饭", "面条", "馒头", "饺子", "汤圆", "豆浆", "油条", "煎饼",
+            # 数码
             "电脑", "手机", "键盘", "鼠标", "屏幕", "耳机", "音箱", "充电",
+            # 动物
             "猫咪", "狗狗", "兔子", "老虎", "狮子", "熊猫", "鸟儿", "鱼儿",
+            # 情绪
             "快乐", "悲伤", "愤怒", "平静", "兴奋", "疲惫", "幸福", "孤独",
+            # 地名
             "中国", "北京", "上海", "广州", "深圳", "杭州", "成都", "重庆",
+            # 行为
             "学习", "工作", "休息", "运动", "阅读", "写作", "思考", "创造",
+            # 自然 / daily 配置覆盖
+            "夜空", "星辰", "月亮", "太阳", "云朵", "微风", "湖泊", "江河",
+            "森林", "沙滩", "黄昏", "晴天", "山水",
         ]
         self._all_words = list(self._mock_vocab)
-        self._target_pool: List[str] = []  # mock 模式下无高频白名单，保持接口一致
+        self._target_pool: List[str] = []
         self._target_pool_set: set = set()
         logger.warning("Running in MOCK mode. Similarity scores are NOT real.")
 
     def has(self, word: str) -> bool:
-        return word in self._mock_vocab or len(word) >= 2
+        # 接受 mock_vocab 中的词，或任意 2-4 字纯中文词（让玩家能猜任何东西）
+        if word in self._mock_vocab:
+            return True
+        return 2 <= len(word) <= 4 and _is_pure_chinese(word)
 
     def similarity(self, w1: str, w2: str) -> float:
         if w1 == w2:
             return 1.0
-        # 用 hash 制造稳定的伪相似度 ∈ [-0.3, 0.95]
         h = hash((min(w1, w2), max(w1, w2))) % 10000
         return -0.3 + (h / 10000) * 1.25
 
@@ -287,11 +309,13 @@ class _MockEngine(WordVectorEngine):
 
 
 def get_engine_or_mock() -> WordVectorEngine:
-    """生产用 get_engine，词向量缺失时回落到 mock 以便联调前端。"""
+    """生产用 get_engine，词向量 / gensim 缺失时回落到 mock 以便联调前端。"""
     try:
         return get_engine()
-    except FileNotFoundError as e:
-        logger.warning("%s\nFalling back to MOCK engine for development.", e)
+    except (FileNotFoundError, ImportError, ModuleNotFoundError) as e:
+        logger.warning(
+            "Real engine unavailable (%s). Falling back to MOCK engine.", e,
+        )
         global _engine
         _engine = _MockEngine()
         return _engine
