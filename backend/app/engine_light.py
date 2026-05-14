@@ -10,32 +10,27 @@ LightEngine —— 不加载词向量的轻量引擎，仅基于离线预计算�
     target_len INTEGER NOT NULL,
     neighbors BLOB NOT NULL  -- gzip(json.dumps([[word, sim], ...]))
   )
-  table neighbor_index(
-    code TEXT,
-    word TEXT,
-    sim REAL,
-    rank INTEGER,
-    PRIMARY KEY (code, word)
-  ) -- 用于 O(1) similarity / rank 查询
+
+为什么不再用 neighbor_index 行索引表？
+- 1781 谜底 × 1000 邻居 = 178 万行索引 + 索引树，sqlite 体积膨胀到 ~150MB
+- GitHub 单文件 100MB 限制，超了 push 不上去
+- 改为：blob 是唯一真源，per-puzzle 启动时懒解压到 dict 缓存
+- 1 个谜底的 dict 约 50KB，1781 个全装内存 ≈ 90MB；按需懒装更省
 
 为什么用 SQLite？
 - Python 内置，零依赖
 - 单文件，Vercel 部署友好（一个文件而不是 1781 个）
 - 多进程安全
-- 查询 O(log n)，比读完整 JSON 快
+- per-puzzle blob 查询 O(log n)
 
 LightEngine 接口语义
 --------------------
 - 不同于 LocalEngine 的"全词表":LightEngine 的 vocab 是「所有谜底的 Top-1000 邻居并集」
 - has(word)：词是否在 *某个* 谜底的 Top-1000 内
-- similarity(target, word)：仅当 (target, word) 在邻居表中才返回真实相似度；否则返回 -1.0
-- top_k(target, k)：仅对预计算过的谜底有效；对未知词抛 ValueError
+- similarity(target, word)：仅当 (target, word) 在 target 的邻居表中才返回真实相似度；否则返回 -1.0
+- top_k(target, k)：仅对预计算过的谜底有效；对未知词返回 []
 - random_word：从 puzzles.target 中随机抽
 - is_common：固定 False（高频池由 LocalEngine 维护，离线构建时已在选词阶段过滤）
-
-调用方注意：game.py 创建谜底时只会从 random_word() 返回的"已预计算谜底"中选，
-所以 top_k 永远不会被打到"未知词"。猜词时 similarity 走的是 sim_map（O(1) 命中或 -1），
-也不需要打到原始词向量。
 """
 
 from __future__ import annotations
@@ -46,7 +41,7 @@ import logging
 import random
 import sqlite3
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .puzzle_codes import encode_word
 
@@ -64,8 +59,6 @@ class LightEngine:
         self._db_path = db_path
 
         # ----- 部署诊断（Vercel 等只读 fs / 文件被截断的情况）-----
-        # 在打开 sqlite 之前先验证文件本身是健康的，
-        # 让错误信息直接告诉我们"文件大小是多少 / 是不是 link / 头几个字节是啥"
         try:
             st = db_path.stat()
             size = st.st_size
@@ -81,28 +74,23 @@ class LightEngine:
                 "is_symlink=%s, head=%r",
                 db_path, size, is_symlink, head_bytes,
             )
-            # SQLite 文件头应该是 "SQLite format 3\x00"
             if not head_bytes.startswith(b"SQLite format 3"):
                 raise RuntimeError(
                     f"Database file at {db_path} is not a valid SQLite file. "
-                    f"size={size}, head={head_bytes!r}. "
-                    f"This usually means the file was truncated/replaced during "
-                    f"deployment (e.g. Git LFS pointer, 0-byte stub, or "
-                    f"includeFiles glob did not match)."
+                    f"size={size}, head={head_bytes!r}."
                 )
         except FileNotFoundError:
             raise FileNotFoundError(
                 f"DB stat failed: {db_path} does not exist at runtime."
             )
 
-        # 用 immutable=1 + nolock=1 强制只读，避免在只读 fs（Vercel /var/task）
-        # 上尝试创建 -journal/-wal 文件
+        # 用 immutable=1 强制只读，避免在只读 fs 上尝试创建 -journal/-wal 文件
         uri = f"file:{db_path}?mode=ro&immutable=1"
         logger.info("Connecting to sqlite uri=%s", uri)
         self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
 
-        # 立即跑一个最小查询验证连接真的能用，不要懒到 _load_target_words 才崩
+        # 验证 schema
         try:
             tables = [
                 r[0]
@@ -113,17 +101,25 @@ class LightEngine:
             logger.info("LightEngine: sqlite tables = %s", tables)
         except sqlite3.OperationalError as e:
             raise RuntimeError(
-                f"Failed initial sqlite query on {db_path}: {e}. "
-                f"Connection opened but cannot read schema."
+                f"Failed initial sqlite query on {db_path}: {e}."
             ) from e
 
-        # 缓存所有可作为谜底的词表（小，全量加载到内存）
+        # ---- 内存缓存 ----
+        # per-puzzle 邻居字典：code -> {word: sim}（懒装载）
+        self._neighbors_cache: Dict[str, Dict[str, float]] = {}
+        # per-puzzle 邻居有序列表：code -> [(word, sim), ...] 按 sim 降序（懒装载）
+        self._neighbors_list_cache: Dict[str, List[Tuple[str, float]]] = {}
+
+        # 缓存所有可作为谜底的词表
         self._target_words: List[str] = self._load_target_words()
-        # 缓存所有在某个邻居表里出现过的词（用于 has() 检查）
+        # 缓存所有邻居词的并集（用于 has() 检查）
+        # 一次性把所有 blob 都解压一遍，构建全局已知词集
         self._known_words: set = self._load_known_words()
         logger.info(
-            "LightEngine ready: %d puzzles, %d known words in neighbor union.",
+            "LightEngine ready: %d puzzles, %d known words in neighbor union, "
+            "%d puzzles cached.",
             len(self._target_words), len(self._known_words),
+            len(self._neighbors_cache),
         )
 
     # ---- 装载 ----
@@ -132,7 +128,6 @@ class LightEngine:
     def load(cls, db_path: Optional[Path] = None) -> "LightEngine":
         path = db_path or NEIGHBORS_DB
         if not path.exists():
-            # 增强诊断：列出 PRECOMPUTED_DIR 实际内容，帮助定位 Vercel 部署问题
             parent_listing: List[str] = []
             data_listing: List[str] = []
             try:
@@ -147,8 +142,7 @@ class LightEngine:
                 f"  PRECOMPUTED_DIR exists={PRECOMPUTED_DIR.exists()}, "
                 f"contents={parent_listing}\n"
                 f"  DATA_DIR exists={DATA_DIR.exists()}, contents={data_listing}\n"
-                f"  Run `python -m scripts.build_precomputed` to generate it (local), "
-                f"or check includeFiles in vercel.json (deploy)."
+                f"  Run `python -m scripts.build_precomputed` to generate it."
             )
         return cls(path)
 
@@ -157,9 +151,32 @@ class LightEngine:
         return [r["target"] for r in cur]
 
     def _load_known_words(self) -> set:
-        """加载所有 neighbor_index 中的词，用于 has() 检查。"""
-        cur = self._conn.execute("SELECT DISTINCT word FROM neighbor_index")
-        return {r["word"] for r in cur}
+        """启动时扫描所有 blob，构建全局已知词集。同时缓存解压后的邻居字典。
+
+        注意：这一步把所有 1781 个 blob 解压并装内存。
+        实测 ~80MB 内存占用、~3 秒耗时（lambda cold start 友好）。
+        """
+        known: set = set()
+        cur = self._conn.execute("SELECT code, neighbors FROM puzzles")
+        for row in cur:
+            code = row["code"]
+            try:
+                payload = gzip.decompress(row["neighbors"])
+                neighbors: List[List] = json.loads(payload)
+            except (OSError, json.JSONDecodeError) as e:
+                logger.error("Bad neighbors blob for code=%s: %s", code, e)
+                continue
+            # 同时填充 per-puzzle 缓存（避免 query 时再解压一次）
+            sim_map: Dict[str, float] = {}
+            ordered: List[Tuple[str, float]] = []
+            for w, s in neighbors:
+                fs = float(s)
+                sim_map[w] = fs
+                ordered.append((w, fs))
+                known.add(w)
+            self._neighbors_cache[code] = sim_map
+            self._neighbors_list_cache[code] = ordered
+        return known
 
     # ---- EngineProtocol 实现 ----
 
@@ -170,51 +187,34 @@ class LightEngine:
         return word in self._known_words or word in self._target_words
 
     def is_common(self, word: str) -> bool:
-        # 高频池信息在离线构建时已用于"选词"阶段，运行时无需再判断；
-        # 保持返回 False，让 game.py 走通用路径。
+        # 高频池信息在离线构建时已用于"选词"阶段，运行时无需再判断
         return False
 
     @property
     def has_target_pool(self) -> bool:
-        return False  # 同上
+        return False
 
     def similarity(self, w1: str, w2: str) -> float:
         """
-        在预计算表中查 (w1, w2) 的相似度。
-        - w1 是谜底，w2 是猜词 → O(log n) 查 neighbor_index
+        查 (w1, w2) 的相似度。
+        - w1 是谜底，w2 是猜词 → 查内存 dict
         - 不在邻居表 → 返回 -1.0（语义同 LocalEngine 找不到词时）
         """
         if w1 == w2:
             return 1.0
         code = encode_word(w1)
-        cur = self._conn.execute(
-            "SELECT sim FROM neighbor_index WHERE code = ? AND word = ?",
-            (code, w2),
-        )
-        row = cur.fetchone()
-        if row is None:
+        sim_map = self._neighbors_cache.get(code)
+        if sim_map is None:
             return -1.0
-        return float(row["sim"])
+        return sim_map.get(w2, -1.0)
 
     def top_k(self, word: str, k: int = 1000) -> List[Tuple[str, float]]:
         """读取 word 这个谜底的 Top-K 邻居（按 sim 降序）。"""
         code = encode_word(word)
-        cur = self._conn.execute(
-            "SELECT neighbors FROM puzzles WHERE code = ?",
-            (code,),
-        )
-        row = cur.fetchone()
-        if row is None:
-            # 词不是预计算过的谜底
+        ordered = self._neighbors_list_cache.get(code)
+        if ordered is None:
             return []
-        # 解压
-        try:
-            payload = gzip.decompress(row["neighbors"])
-            neighbors: List[List] = json.loads(payload)
-        except (OSError, json.JSONDecodeError) as e:
-            logger.error("Bad neighbors blob for code=%s: %s", code, e)
-            return []
-        return [(w, float(s)) for w, s in neighbors[:k]]
+        return ordered[:k]
 
     def random_word(
         self,
@@ -225,7 +225,6 @@ class LightEngine:
         pool = candidates or self._target_words
         if not pool:
             raise RuntimeError("LightEngine has no target words.")
-        # 简单按长度过滤；目标词表本来已经是 2-4 字常用词，循环很容易命中
         for _ in range(50):
             w = random.choice(pool)
             if min_len <= len(w) <= max_len:
@@ -238,3 +237,4 @@ class LightEngine:
 
 
 __all__ = ["LightEngine", "NEIGHBORS_DB"]
+

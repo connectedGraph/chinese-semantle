@@ -94,17 +94,11 @@ def _init_db(db_path: Path) -> sqlite3.Connection:
             neighbors BLOB NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_puzzles_target ON puzzles(target);
-
-        CREATE TABLE IF NOT EXISTS neighbor_index (
-            code TEXT NOT NULL,
-            word TEXT NOT NULL,
-            sim REAL NOT NULL,
-            rank INTEGER NOT NULL,
-            PRIMARY KEY (code, word)
-        );
-        CREATE INDEX IF NOT EXISTS idx_neighbor_word ON neighbor_index(word);
         """
     )
+    # 兼容旧 DB：如果存在 neighbor_index 表则丢弃（已被运行时内存缓存替代）
+    # 旧表会让 sqlite 体积膨胀到 150MB+，超 GitHub 100MB 限制
+    conn.execute("DROP TABLE IF EXISTS neighbor_index")
     return conn
 
 
@@ -157,11 +151,6 @@ def build(top_k: int, rebuild: bool) -> None:
             "INSERT OR REPLACE INTO puzzles(code, target, target_len, neighbors) "
             "VALUES (?, ?, ?, ?)",
             (code, word, len(word), payload),
-        )
-        # 同步写邻居索引：用于 O(1) 查询某词在某谜底中的相似度 / rank
-        conn.executemany(
-            "INSERT OR REPLACE INTO neighbor_index(code, word, sim, rank) VALUES (?, ?, ?, ?)",
-            [(code, w, float(s), idx + 1) for idx, (w, s) in enumerate(neighbors)],
         )
 
         if i % 20 == 0 or i == len(to_build):
