@@ -431,9 +431,12 @@ function renderRow(r, { pinned = false } = {}) {
   const level = r.proximity_level;
   let barPct;
   if (level === "hot") {
+    // hot: rank ∈ [1, 300] → 70-100%
     barPct = 70 + ((300 - r.proximity_rank) / 300) * 30;
   } else if (level === "warm") {
-    barPct = 30 + ((1000 - r.proximity_rank) / 700) * 40;
+    // warm: rank ∈ [301, TOP_N=3000] → 30-70%
+    // 注：TOP_N 必须与后端 backend/app/game.py 的 TOP_N 保持一致
+    barPct = 30 + ((3000 - r.proximity_rank) / 2700) * 40;
   } else {
     barPct = Math.max(3, Math.min(28, r.similarity_pct));
   }

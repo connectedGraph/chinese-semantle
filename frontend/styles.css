@@ -844,6 +844,7 @@ input {
   cursor: help;
   user-select: none;
   outline: none;
+  white-space: nowrap;
   transition: border-color 0.15s, background 0.15s;
 }
 .scoring-badge:focus-visible {
@@ -1145,11 +1146,45 @@ body.modal-open { overflow: hidden; }
     gap: 8px;
     font-size: 13px;
   }
-  .topbar-actions input { width: 110px; }
-  .puzzle-badge { margin-right: 6px; padding: 3px 8px; }
+
+  /* ---- 窄屏 topbar 重排 ----
+   * 设计意图：两行布局，避免任何单个元素被挤压成竖排或多行。
+   *   行 1：品牌 logo（左）  +  新建随机游戏 按钮（右，主 CTA）
+   *   行 2：编号徽章 · 计分徽章 · 每日挑战 · 回溯（次要操作集合）
+   */
+  .topbar {
+    gap: 12px 8px;
+    align-items: center;
+  }
+  .topbar-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* 主 CTA 按钮"逃出" topbar-actions，独占第 1 行右侧 */
+  .topbar-actions {
+    order: 2;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-start;
+  }
+  #new-game-btn {
+    order: 1;
+    flex: 0 0 auto;
+    margin-left: auto;     /* 推到 topbar 第 1 行最右 */
+  }
+  /* 次要元素全部不可被压扁，单行显示 */
+  .puzzle-badge,
+  .scoring-badge,
+  .topbar-nav .btn-nav,
+  #new-game-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .puzzle-badge { margin-right: 0; padding: 3px 8px; }
   .puzzle-badge-label { display: none; }
-  .topbar { gap: 8px; }
-  .topbar-nav { order: 3; flex-basis: 100%; justify-content: flex-start; }
+  .topbar-nav { gap: 4px; }
+
   .scoring-tooltip {
     right: auto;
     left: 0;

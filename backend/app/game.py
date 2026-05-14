@@ -5,7 +5,7 @@
 ------------
 Game:
   - id, target_word, created_at, is_finished
-  - top_neighbors: List[(word, sim)]  目标词的 Top-1000 邻居（按 sim 降序）
+  - top_neighbors: List[(word, sim)]  目标词的 Top-N 邻居（按 sim 降序，N=TOP_N）
   - rank_map:      Dict[word, rank]   word -> 排名 (1-based)，O(1) 查询
   - history:       List[GuessRecord]  按时间顺序的猜词历史
   - hints:         List[HintWord]     创建时给出的 3 个引导词
@@ -13,8 +13,8 @@ Game:
 接近度分档
 ----------
 - hot:  rank ∈ [1, 300]
-- warm: rank ∈ [301, 1000]
-- cold: 不在 Top-1000
+- warm: rank ∈ [301, TOP_N]
+- cold: 不在 Top-N
 
 未来若要落 Redis：把下面的 _games 字典换成 RedisGameStore 即可。
 """
@@ -43,12 +43,16 @@ GameSource = Literal["random", "daily", "shared"]
 
 logger = logging.getLogger(__name__)
 
-TOP_N = 1000          # 接近度计算的总宽度
+# 接近度计算的总宽度。必须 ≤ build_precomputed.py 的 --top-k 参数。
+# 当前 LightEngine 数据：Top-3000，所以这里也用 3000，让 rank 排名覆盖更广。
+TOP_N = 3000
 HOT_THRESHOLD = 300   # rank ≤ 300 视为 hot
 MAX_EXTRA_HINTS = 5   # 每局最多支持手动提示 5 次
 
 # ---- 提示阶梯参数 ----
 # 设计意图：5 次提示作为一条等比阶梯，从 HINT_INITIAL_RANK 平滑收敛到 HINT_FINAL_RANK
+# 注意 HINT_INITIAL_RANK 不必等于 TOP_N。它代表"玩家完全无线索时第 1 次提示
+# 给到的温度感档位"——给到 #1000 已经是适合启发的接近度，再远反而失去引导意义。
 HINT_INITIAL_RANK = 1000   # 玩家毫无线索时，第 1 次提示的起点档位
 HINT_FINAL_RANK   = 50     # 玩家暂未触达 Top-50 时，提示阶梯的常规收敛地板
 HINT_HARD_FLOOR   = 2      # 绝对地板：rank=1 = 目标本身，永不作为提示
