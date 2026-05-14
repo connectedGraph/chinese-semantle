@@ -1,0 +1,15 @@
+# 仅构建脚本 / 本地开发使用的依赖。
+# 生产运行时（uvicorn + engine）无需安装这些依赖。
+#
+# 使用：
+#   cd backend
+#   source .venv/bin/activate
+#   pip install -r requirements-dev.txt
+#   python scripts/build_wordlist.py
+#
+# 产物是 backend/data/target_words.txt，纯文本、可版本化、可手工增删。
+
+-r requirements.txt
+
+# 新版 build_wordlist.py 不再依赖 jieba；本文件保留是为了将来如需引入开发期工具时
+# 有显式入口（例如 pytest / mypy）。当前只引用 requirements.txt 中的运行期依赖。

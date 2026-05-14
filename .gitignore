@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Word vectors (large files — only generated/used locally for the precompute step)
+backend/data/*.kv
+backend/data/*.kv.vectors.npy
+backend/data/*.tar.gz
+backend/data/*.bin
+
+# Keep whitelist & target_words in repo (small text inputs to precompute)
+!backend/data/whitelist.txt
+!backend/data/target_words.txt
+!backend/data/blacklist_memo.txt
+!backend/data/README.md
+
+# Keep precomputed data in repo (so Vercel can run without 1GB embedding)
+!backend/data/precomputed/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Vercel
+.vercel/
+
+# Logs
+*.log

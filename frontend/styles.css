@@ -1,0 +1,738 @@
+/* ==========================================================================
+   猜词 · Chinese Semantle
+   设计原则：
+   - 克制的色彩：纸张白 + 墨黑 + 一处暖橙作为强调
+   - 字体：系统中文 + 等宽数字
+   - 不使用花哨阴影；仅用 1px hairline 与 subtle 灰阶分层
+   ========================================================================== */
+
+:root {
+  /* 基础色 */
+  --bg:           #fafaf7;        /* 米白纸张 */
+  --surface:     #ffffff;
+  --ink:         #1a1a1a;         /* 主要文字 */
+  --ink-2:       #4a4a4a;         /* 次要文字 */
+  --ink-3:       #8a8a85;         /* 弱化文字 */
+  --line:        #e8e6e0;         /* hairline */
+  --line-strong: #d6d2c8;
+
+  /* 单一暖色强调（Semantle 风格的"温度感"）*/
+  --accent:      #c2410c;         /* 暖橙 */
+  --accent-soft: #fef3eb;
+  --accent-line: #f5d4be;
+
+  /* 接近度分档色：克制的渐变 */
+  --hot-bg:      #fef3eb;
+  --hot-fg:      #c2410c;
+  --hot-bar:     #ea580c;
+
+  --warm-bg:     #f7f4ed;
+  --warm-fg:     #846a3c;
+  --warm-bar:    #c4a268;
+
+  --cold-bg:     #f5f4f0;
+  --cold-fg:     #8a8a85;
+  --cold-bar:    #c8c5bc;
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+               "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Menlo", "Consolas", monospace;
+
+  /* 尺寸 */
+  --max-w: 720px;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+.app {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 32px 20px 80px;
+}
+
+/* ---------- topbar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--accent);
+  display: inline-block;
+  transform: translateY(-2px);
+}
+
+.brand h1 {
+  font-size: 22px;
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand-sub {
+  color: var(--ink-3);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.topbar-actions input {
+  width: 130px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.topbar-actions input:focus {
+  border-color: var(--ink-2);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-primary {
+  background: var(--ink);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #000;
+}
+
+.btn-primary:disabled {
+  background: var(--line-strong);
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--ink-2);
+  color: var(--ink);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- guess form ---------- */
+
+.guess-section {
+  margin-top: 24px;
+}
+
+/* ---------- rules card ---------- */
+
+.rules-card {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.rules-summary {
+  list-style: none;          /* 隐藏默认三角 */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  outline: none;
+}
+
+.rules-summary::-webkit-details-marker {
+  display: none;             /* Safari 默认三角 */
+}
+
+.rules-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+
+.rules-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+
+/* 用纯 CSS 画一个会旋转的小三角 */
+.rules-toggle {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink-3);
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);  /* 折叠时朝右 */
+}
+
+.rules-card[open] .rules-toggle {
+  transform: rotate(0deg);    /* 展开时朝下 */
+}
+
+.rules-list {
+  list-style: none;
+  margin: 12px 0 2px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rules-list li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.rules-num {
+  flex: 0 0 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.rules-text {
+  flex: 1;
+}
+
+.rules-text strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.guess-form {
+  display: flex;
+  gap: 8px;
+}
+
+.guess-form input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 16px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.guess-form input:focus {
+  border-color: var(--ink);
+}
+
+.guess-form .btn {
+  padding: 12px 24px;
+  font-size: 15px;
+}
+
+.guess-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.guess-actions .btn {
+  font-size: 13px;
+  padding: 6px 14px;
+}
+
+.hint-quota {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+
+.status-msg {
+  margin: 10px 4px 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  min-height: 1.4em;
+  text-align: center;
+}
+
+.status-msg.error { color: var(--accent); }
+
+/* ---------- history ---------- */
+
+.history-section {
+  margin-top: 32px;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.history-count {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.history-count strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.sort-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.sort-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--ink-3);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  transition: background 0.15s, color 0.15s;
+}
+
+.sort-tab:last-child {
+  border-right: none;
+}
+
+.sort-tab.is-active {
+  background: var(--ink);
+  color: #fff;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 80px 140px 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.history-row.is-pinned {
+  background: var(--accent-soft);
+  border-bottom-color: var(--accent-line);
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  padding: 12px 10px;
+  border: 1px solid var(--accent-line);
+}
+
+.history-row.is-target {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.history-row.is-target .col-rank,
+.history-row.is-target .col-pct {
+  color: #fff;
+}
+
+.col-order {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  text-align: right;
+}
+
+.col-word {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.col-word .player {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-weight: 400;
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.col-word .hint-badge {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  font-weight: 400;
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 0 5px;
+  border-radius: 3px;
+  line-height: 1.4;
+}
+
+.history-row.is-target .col-word .player {
+  color: rgba(255,255,255,0.8);
+  background: rgba(255,255,255,0.15);
+}
+
+.col-pct {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.col-bar {
+  height: 6px;
+  background: var(--cold-bg);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.col-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--cold-bar);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.col-bar.warm > span { background: var(--warm-bar); }
+.col-bar.hot  > span { background: var(--hot-bar); }
+
+.col-rank {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: right;
+  color: var(--ink-3);
+}
+
+.col-rank.warm { color: var(--warm-fg); }
+.col-rank.hot  { color: var(--hot-fg); font-weight: 600; }
+
+/* ---------- finish ---------- */
+
+.finish-banner {
+  margin-top: 32px;
+  padding: 24px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.finish-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--accent);
+}
+
+.finish-detail {
+  font-size: 14px;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.footer a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+  transition: color 0.15s, border-color 0.15s;
+}
+.footer a:hover {
+  color: var(--ink-1);
+  border-bottom-color: var(--ink-3);
+}
+.footer-sep {
+  margin: 0 8px;
+  color: var(--line-strong);
+}
+
+/* ---------- puzzle code badge ---------- */
+
+.puzzle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.puzzle-badge:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.puzzle-badge-label {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.puzzle-badge-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+}
+
+/* ---------- leaderboard ---------- */
+
+.leaderboard-card {
+  margin-top: 14px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.leaderboard-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.leaderboard-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.leaderboard-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.leaderboard-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.leaderboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-top: 1px dashed var(--line);
+}
+.leaderboard-row:first-child { border-top: 0; }
+.lb-rank {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-align: center;
+}
+.lb-rank-1 { color: var(--accent); }
+.lb-rank-2, .lb-rank-3 { color: var(--ink-2); }
+.lb-name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.leaderboard-empty {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ---------- submit score box ---------- */
+
+.submit-score-box {
+  margin: 14px 0 6px;
+  padding: 12px 14px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+}
+.submit-score-tip {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.submit-score-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+.submit-score-row input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: var(--font-sans);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.submit-score-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.submit-score-msg {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  min-height: 1em;
+}
+.submit-score-msg.error {
+  color: var(--accent);
+}
+
+/* ---------- finish actions ---------- */
+
+.finish-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 540px) {
+  .app { padding: 20px 14px 60px; }
+  .history-row {
+    grid-template-columns: 28px 1fr 60px 80px 48px;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .topbar-actions input { width: 110px; }
+  .puzzle-badge { margin-right: 6px; padding: 3px 8px; }
+  .puzzle-badge-label { display: none; }
+}

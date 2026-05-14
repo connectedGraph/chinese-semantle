@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>猜词 · Chinese Semantle</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <h1>猜词</h1>
+        <span class="brand-sub">Chinese Semantle</span>
+      </div>
+      <div class="topbar-actions">
+        <span id="puzzle-badge" class="puzzle-badge" hidden title="谜底编号 · 点击复制分享链接">
+          <span class="puzzle-badge-label">编号</span>
+          <span id="puzzle-badge-code" class="puzzle-badge-code">------</span>
+        </span>
+        <button id="new-game-btn" class="btn btn-primary">新游戏</button>
+      </div>
+    </header>
+
+    <section class="guess-section">
+      <details class="rules-card" open>
+        <summary class="rules-summary">
+          <span class="rules-title">玩法说明</span>
+          <span class="rules-toggle" aria-hidden="true"></span>
+        </summary>
+        <ol class="rules-list">
+          <li>
+            <span class="rules-num">1</span>
+            <span class="rules-text">用<strong>尽可能少的次数</strong>猜出一个隐藏的中文词。</span>
+          </li>
+          <li>
+            <span class="rules-num">2</span>
+            <span class="rules-text">每次输入一个中文词，会得到与谜底的<strong>相似度</strong>分数 —— 数值越高，关联越紧密。猜词次数<strong>不限</strong>。</span>
+          </li>
+          <li>
+            <span class="rules-num">3</span>
+            <span class="rules-text">若该词进入谜底的<strong>最近 1000 个相关词</strong>，还会显示一个<strong>接近度排名</strong>（#1 即谜底本身）。</span>
+          </li>
+        </ol>
+      </details>
+
+      <section id="leaderboard-card" class="leaderboard-card" hidden>
+        <div class="leaderboard-head">
+          <span class="leaderboard-title">本局排行榜</span>
+          <span id="leaderboard-meta" class="leaderboard-meta"></span>
+        </div>
+        <ol id="leaderboard-list" class="leaderboard-list"></ol>
+        <p id="leaderboard-empty" class="leaderboard-empty" hidden>
+          还没有人通关本局，成为第一个吧。
+        </p>
+      </section>
+
+      <form id="guess-form" class="guess-form" autocomplete="off">
+        <input
+          id="guess-input"
+          type="text"
+          placeholder="输入一个中文词，回车提交"
+          maxlength="8"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <button type="submit" class="btn btn-primary" id="guess-btn">猜</button>
+      </form>
+      <div class="guess-actions">
+        <button
+          type="button"
+          id="request-hint-btn"
+          class="btn btn-ghost"
+          title="基于你的最佳猜测，自动猜一个更接近答案的词"
+        >提示 <span id="hint-quota" class="hint-quota"></span></button>
+        <button type="button" id="giveup-btn" class="btn btn-ghost">放弃</button>
+      </div>
+      <p id="status-msg" class="status-msg" aria-live="polite"></p>
+    </section>
+
+    <section id="finish-banner" class="finish-banner" hidden>
+      <p class="finish-title">恭喜，答对了！</p>
+      <p class="finish-detail">
+        答案是 <strong id="finish-target"></strong>，你猜了 <strong id="finish-count"></strong> 次<span id="finish-hint-text"></span>
+      </p>
+
+      <div id="submit-score-box" class="submit-score-box" hidden>
+        <p class="submit-score-tip">没有使用提示，可以把成绩提交到本局排行榜：</p>
+        <div class="submit-score-row">
+          <input
+            id="nickname-input"
+            type="text"
+            placeholder="昵称（可留空，最多 12 字）"
+            maxlength="12"
+            autocomplete="off"
+          />
+          <button id="submit-score-btn" class="btn btn-primary" type="button">提交成绩</button>
+          <button id="submit-score-skip" class="btn btn-ghost" type="button">跳过</button>
+        </div>
+        <p id="submit-score-msg" class="submit-score-msg" aria-live="polite"></p>
+      </div>
+
+      <div class="finish-actions">
+        <button class="btn btn-ghost" id="share-btn" type="button">复制分享链接</button>
+        <button class="btn btn-primary" id="finish-restart" type="button">再来一局</button>
+      </div>
+    </section>
+
+    <section class="history-section" id="history-section" hidden>
+      <div class="history-head">
+        <span class="history-count">
+          已猜 <strong id="guess-count">0</strong> 次
+        </span>
+        <div class="sort-tabs">
+          <button class="sort-tab is-active" data-sort="similarity">按相似度</button>
+          <button class="sort-tab" data-sort="time">按时间</button>
+        </div>
+      </div>
+
+      <ul id="history-list" class="history-list"></ul>
+    </section>
+
+    <footer class="footer">
+      <span>© 2026 太空小孩 (<a href="https://spacekid.me/" target="_blank" rel="noopener noreferrer">spacekid.me</a>)</span>
+      <span class="footer-sep">·</span>
+      <a id="api-docs-link" href="/docs" target="_blank" rel="noopener noreferrer">API 文档</a>
+    </footer>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

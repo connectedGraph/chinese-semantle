@@ -1,0 +1,32 @@
+# Vercel 上传时排除的文件
+# 函数包大小敏感：1GB 词向量绝对不能上传
+
+# 词向量大文件（运行时不需要，仅本地开发用）
+backend/data/*.kv
+backend/data/*.kv.vectors.npy
+backend/data/*.bin
+backend/data/*.tar.gz
+
+# 本地开发依赖（runtime 用根目录 requirements.txt 即可）
+backend/requirements.txt
+backend/run.sh
+
+# Python 缓存
+**/__pycache__/
+**/*.pyc
+
+# 文档 / 仓库元信息
+README.md
+DEPLOY.md
+.git/
+.gitignore
+.env
+.env.local
+
+# 开发工具
+.vscode/
+.idea/
+.DS_Store
+
+# 测试
+backend/tests/
