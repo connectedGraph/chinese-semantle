@@ -23,6 +23,7 @@ backend/data/*.bin
 
 # IDE
 .vscode/
+.codebuddy/
 .idea/
 .DS_Store
 

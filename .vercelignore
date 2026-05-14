@@ -25,6 +25,7 @@ DEPLOY.md
 
 # 开发工具
 .vscode/
+.codebuddy/
 .idea/
 .DS_Store
 
