@@ -20,6 +20,9 @@ backend/data/*.bin
 
 # Keep precomputed data in repo (so Vercel can run without 1GB embedding)
 !backend/data/precomputed/
+# 但忽略 SQLite WAL 模式的临时文件
+backend/data/precomputed/*.sqlite-shm
+backend/data/precomputed/*.sqlite-wal
 
 # IDE
 .vscode/
