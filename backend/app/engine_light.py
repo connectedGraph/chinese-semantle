@@ -62,10 +62,61 @@ class LightEngine:
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = db_path
-        self._conn = sqlite3.connect(
-            f"file:{db_path}?mode=ro", uri=True, check_same_thread=False
-        )
+
+        # ----- 部署诊断（Vercel 等只读 fs / 文件被截断的情况）-----
+        # 在打开 sqlite 之前先验证文件本身是健康的，
+        # 让错误信息直接告诉我们"文件大小是多少 / 是不是 link / 头几个字节是啥"
+        try:
+            st = db_path.stat()
+            size = st.st_size
+            is_symlink = db_path.is_symlink()
+            head_bytes = b""
+            try:
+                with open(db_path, "rb") as f:
+                    head_bytes = f.read(16)
+            except Exception as e:  # noqa: BLE001
+                head_bytes = f"<read failed: {e}>".encode()
+            logger.info(
+                "LightEngine db diagnostic: path=%s, size=%d bytes, "
+                "is_symlink=%s, head=%r",
+                db_path, size, is_symlink, head_bytes,
+            )
+            # SQLite 文件头应该是 "SQLite format 3\x00"
+            if not head_bytes.startswith(b"SQLite format 3"):
+                raise RuntimeError(
+                    f"Database file at {db_path} is not a valid SQLite file. "
+                    f"size={size}, head={head_bytes!r}. "
+                    f"This usually means the file was truncated/replaced during "
+                    f"deployment (e.g. Git LFS pointer, 0-byte stub, or "
+                    f"includeFiles glob did not match)."
+                )
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"DB stat failed: {db_path} does not exist at runtime."
+            )
+
+        # 用 immutable=1 + nolock=1 强制只读，避免在只读 fs（Vercel /var/task）
+        # 上尝试创建 -journal/-wal 文件
+        uri = f"file:{db_path}?mode=ro&immutable=1"
+        logger.info("Connecting to sqlite uri=%s", uri)
+        self._conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+
+        # 立即跑一个最小查询验证连接真的能用，不要懒到 _load_target_words 才崩
+        try:
+            tables = [
+                r[0]
+                for r in self._conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            ]
+            logger.info("LightEngine: sqlite tables = %s", tables)
+        except sqlite3.OperationalError as e:
+            raise RuntimeError(
+                f"Failed initial sqlite query on {db_path}: {e}. "
+                f"Connection opened but cannot read schema."
+            ) from e
+
         # 缓存所有可作为谜底的词表（小，全量加载到内存）
         self._target_words: List[str] = self._load_target_words()
         # 缓存所有在某个邻居表里出现过的词（用于 has() 检查）
