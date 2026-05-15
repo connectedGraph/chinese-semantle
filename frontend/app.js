@@ -307,6 +307,8 @@ let _loadingTimer = null;
 function showLoading() {
   if (IS_LOCAL_DEV) return;            // 本地开发不展示
   if (!els.loadingPlaceholder) return;
+  // 互斥：loading 期间隐藏 gameinfo-bar，避免两者同时出现造成 UI 抖动
+  if (els.gameinfoBar) els.gameinfoBar.hidden = true;
   els.loadingPlaceholder.hidden = false;
   els.loadingTip.classList.remove("is-warming");
   els.loadingTip.textContent = "正在加载，首次访问需要 3-5 秒，请稍候…";
@@ -317,7 +319,7 @@ function showLoading() {
   _loadingTimer = setTimeout(() => {
     if (!els.loadingPlaceholder.hidden) {
       els.loadingTip.classList.add("is-warming");
-      els.loadingTip.textContent = "服务器正在唤醒，请稍候…（这通常只发生在长时间无人访问后）";
+      els.loadingTip.textContent = "服务器正在唤醒，请稍候…";
     }
   }, 3000);
 }
@@ -389,7 +391,7 @@ function renderPuzzleBadge() {
  * 模式标签文案：
  *   - random : 随机游戏
  *   - daily  : 每日挑战 (附 YYYY-MM-DD)
- *   - shared : 分享对局
+ *   - shared : 自定义分享对局
  */
 function renderGameinfoBar() {
   if (!state.currentGame) {
@@ -404,7 +406,7 @@ function renderGameinfoBar() {
     const d = state.currentGame.daily_date;
     label = d ? `每日挑战 · ${d}` : "每日挑战";
   } else if (src === "shared") {
-    label = "分享对局";
+    label = "自定义分享对局";
   } else {
     label = "随机游戏";
   }

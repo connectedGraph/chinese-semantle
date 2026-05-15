@@ -106,6 +106,8 @@ input {
   gap: 8px;
   margin-top: 16px;
 }
+/* hidden 属性需要显式 override 自定义 display，否则 display: flex 会覆盖默认 display: none */
+.gameinfo-bar[hidden] { display: none; }
 
 .gameinfo-mode {
   display: inline-flex;
@@ -147,6 +149,8 @@ input {
   gap: 12px;
   margin-top: 16px;
 }
+/* 同 .gameinfo-bar：display: flex 会覆盖 hidden，需显式声明 */
+.loading-placeholder[hidden] { display: none; }
 
 .loading-mode {
   display: inline-flex;
