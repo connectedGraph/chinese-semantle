@@ -54,6 +54,17 @@
       </span>
     </section>
 
+    <!-- 加载占位：DOMContentLoaded 后立刻显示，不等 API 返回，给用户清晰反馈
+         API 成功后会被 gameinfo-bar / status-msg 接管。
+         Vercel Functions 冷启动时这里会显示 3-4 秒。 -->
+    <section id="loading-placeholder" class="loading-placeholder" hidden aria-live="polite">
+      <span class="loading-mode">
+        <span class="loading-dot" aria-hidden="true"></span>
+        <span class="loading-mode-text">加载中</span>
+      </span>
+      <p id="loading-tip" class="loading-tip">正在加载，首次访问需要 3-5 秒，请稍候…</p>
+    </section>
+
     <section class="guess-section">
       <details class="rules-card" open>
         <summary class="rules-summary">

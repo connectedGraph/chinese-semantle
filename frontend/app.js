@@ -57,6 +57,10 @@ const els = {
   scoringBadgeLabel:   $("scoring-badge-label"),
   scoringTooltipReason:$("scoring-tooltip-reason"),
 
+  // loading placeholder（冷启动期间显示，覆盖 gameinfo-bar / status-msg 的位置）
+  loadingPlaceholder: $("loading-placeholder"),
+  loadingTip:         $("loading-tip"),
+
   // finish
   finishTitle:      $("finish-title"),
   finishDetailRest: $("finish-detail-rest"),
@@ -255,6 +259,45 @@ const DEFAULT_PLACEHOLDER = "输入一个中文词，回车提交";
 function setStatus(msg, isError = false) {
   els.statusMsg.textContent = msg || "";
   els.statusMsg.classList.toggle("error", !!isError);
+}
+
+/**
+ * 加载占位控制：
+ *
+ * Vercel Functions 是 serverless / 按需启动的：
+ * - 一个 region 的 instance 在闲置 5-15 分钟后会被回收
+ * - 回收后第一个用户访问需要冷启动，本项目实测 3-4 秒（LightEngine 解压邻居数据）
+ * - 之后的请求会复用 warm instance，仅几十毫秒
+ *
+ * 因此**只有部分用户**会遇到冷启动；为了缓解他们的等待焦虑，
+ * 我们在首屏 DOMContentLoaded 后立刻显示 loading 占位，
+ * 第一个 API 请求成功后再隐藏。
+ *
+ * 超过 3 秒还没好 → 文案升级为"服务器正在唤醒，请稍候…"，
+ * 让用户明确感知"在做事而非卡住"。
+ */
+let _loadingTimer = null;
+function showLoading() {
+  if (!els.loadingPlaceholder) return;
+  els.loadingPlaceholder.hidden = false;
+  els.loadingTip.classList.remove("is-warming");
+  els.loadingTip.textContent = "正在加载，首次访问需要 3-5 秒，请稍候…";
+  // 3 秒后升级文案，进一步缓解焦虑
+  if (_loadingTimer) clearTimeout(_loadingTimer);
+  _loadingTimer = setTimeout(() => {
+    if (!els.loadingPlaceholder.hidden) {
+      els.loadingTip.classList.add("is-warming");
+      els.loadingTip.textContent = "服务器正在唤醒，请稍候…（这通常只发生在长时间无人访问后）";
+    }
+  }, 3000);
+}
+function hideLoading() {
+  if (!els.loadingPlaceholder) return;
+  els.loadingPlaceholder.hidden = true;
+  if (_loadingTimer) {
+    clearTimeout(_loadingTimer);
+    _loadingTimer = null;
+  }
 }
 
 function setTargetLenTip(len) {
@@ -791,6 +834,8 @@ async function startNewGame(opts = {}) {
     els.newGameBtn.disabled = false;
     els.dailyBtn.disabled = false;
     els.calendarBtn.disabled = false;
+    // 第一个 API 已经返回（无论成败），冷启动 loading 占位可以下场了
+    hideLoading();
   }
 }
 
@@ -917,6 +962,8 @@ async function goToToday() {
     els.dailyNewDot.hidden = true;
   } catch (err) {
     setStatus(`无法加载今日挑战：${err.message}`, true);
+    // 兜底：startNewGame 没被走到，loading 占位也得清掉
+    hideLoading();
   }
 }
 
@@ -1105,6 +1152,8 @@ function init() {
   setInterval(checkDailyRollover, 60 * 1000);
 
   // 路由：?game= > ?daily= > 默认（→ 今日 daily）
+  // 立即显示 loading 占位，第一个 API 请求成功后会被 hideLoading 隐藏
+  showLoading();
   const params = getUrlParams();
   if (params.game && isValidPuzzleCode(params.game)) {
     startNewGame({ mode: "shared", puzzle_code: params.game.toUpperCase() });
