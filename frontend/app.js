@@ -282,6 +282,8 @@ function showLoading() {
   els.loadingPlaceholder.hidden = false;
   els.loadingTip.classList.remove("is-warming");
   els.loadingTip.textContent = "正在加载，首次访问需要 3-5 秒，请稍候…";
+  // 禁用所有游戏交互控件，避免用户在 API 还没回来时操作
+  setGameControlsDisabled(true);
   // 3 秒后升级文案，进一步缓解焦虑
   if (_loadingTimer) clearTimeout(_loadingTimer);
   _loadingTimer = setTimeout(() => {
@@ -298,6 +300,21 @@ function hideLoading() {
     clearTimeout(_loadingTimer);
     _loadingTimer = null;
   }
+  // 解禁游戏控件；具体启用与否由后续 updateHintQuota / 游戏状态决定
+  setGameControlsDisabled(false);
+}
+
+/**
+ * 统一控制猜词区域的可交互性。
+ * 在以下场景调用：
+ * - showLoading() / hideLoading()：冷启动 loading 期间禁用，加载完后解禁
+ * - 后续 updateHintQuota / renderFinish 等会按游戏状态再细化控制
+ */
+function setGameControlsDisabled(disabled) {
+  if (els.guessInput) els.guessInput.disabled = disabled;
+  if (els.guessBtn) els.guessBtn.disabled = disabled;
+  if (els.requestHintBtn) els.requestHintBtn.disabled = disabled;
+  if (els.giveupBtn) els.giveupBtn.disabled = disabled;
 }
 
 function setTargetLenTip(len) {
@@ -1038,11 +1055,20 @@ async function renderCalendar() {
     const isPlayable = !!(it && it.is_published);
     const beforeLaunch = dateStr < launch;
     const persisted = isPlayable ? findPersistedByDailyDate(dateStr) : null;
-    const isPlayed = !!persisted;
+    // 「真正挑战过」的判定：localStorage 有记录 **且** 至少猜过一个非提示词
+    // 仅打开过页面但没猜词不算挑战。
+    const hasRealHistory = !!persisted &&
+      Array.isArray(persisted.history) &&
+      persisted.history.some((r) => !r.is_hint);
+    const isFinished  = !!persisted && persisted.is_finished;
+    const isInProgress = hasRealHistory && !isFinished;
+    const isRevealed   = isFinished;  // 已结束（猜中或放弃揭晓）
 
     if (isToday) cell.classList.add("is-today");
     if (isCurrent) cell.classList.add("is-current");
-    if (isPlayed) cell.classList.add("is-played");
+    // is-played 仅用于「已结束」局；进行中的局用 is-inprogress
+    if (isRevealed) cell.classList.add("is-played");
+    if (isInProgress) cell.classList.add("is-inprogress");
     if (!isPlayable) {
       cell.classList.add("is-disabled");
       cell.disabled = true;
@@ -1050,11 +1076,21 @@ async function renderCalendar() {
     if (beforeLaunch) cell.classList.add("is-before-launch");
 
     let badge = "";
-    if (isPlayed) {
-      const finished = persisted.is_finished && !persisted.give_up_ever
-        ? "✓"
-        : persisted.give_up_ever ? "×" : "·";
-      badge = `<span class="cal-badge">${finished}</span>`;
+    let badgeKind = "";  // 用于样式分级：unplayed / inprogress / revealed
+    if (isPlayable) {
+      if (isRevealed && persisted.target) {
+        // 已结束（猜中或放弃揭晓）→ 直接展示谜底
+        badge = persisted.target;
+        badgeKind = "revealed";
+      } else if (isInProgress) {
+        // 真正猜过词且未结束
+        badge = "挑战中";
+        badgeKind = "inprogress";
+      } else {
+        // 没玩过 / 只打开过页面 / persisted 但 history 空
+        badge = "未挑战";
+        badgeKind = "unplayed";
+      }
     }
 
     let title;
@@ -1064,15 +1100,19 @@ async function renderCalendar() {
       title = `当前对局：${dateStr}`;
     } else if (isToday) {
       title = `今日：${dateStr}`;
-    } else if (isPlayed) {
-      title = persisted.is_finished
-        ? (persisted.give_up_ever ? `${dateStr}（已放弃）` : `${dateStr}（已通关）`)
-        : `${dateStr}（进行中）`;
+    } else if (isRevealed) {
+      title = persisted.give_up_ever ? `${dateStr}（已放弃）` : `${dateStr}（已通关）`;
+    } else if (isInProgress) {
+      title = `${dateStr}（挑战中）`;
     } else {
       title = dateStr;
     }
+    }
     cell.title = title;
-    cell.innerHTML = `<span class="cal-day">${day}</span>${badge}`;
+    cell.innerHTML = `
+      <span class="cal-day">${day}</span>
+      ${badge ? `<span class="cal-badge cal-badge-${badgeKind}">${escapeHtml(badge)}</span>` : ""}
+    `;
 
     if (isPlayable) {
       cell.addEventListener("click", () => {

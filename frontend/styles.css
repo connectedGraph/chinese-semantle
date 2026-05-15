@@ -1150,11 +1150,16 @@ body.modal-open { overflow: hidden; }
   font-size: 13px;
   color: var(--ink-2);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 3px;
   cursor: pointer;
   transition: background 0.12s, border-color 0.12s, color 0.12s;
-  padding: 0;
+  padding: 4px 2px;
+  /* badge 文本可能较长（谜底词），cell 是固定 aspect 1:1，
+     不允许 badge 撑破 cell；超出截断 */
+  overflow: hidden;
 }
 .cal-cell:hover:not(:disabled):not(.is-empty) {
   background: var(--bg);
@@ -1196,17 +1201,32 @@ body.modal-open { overflow: hidden; }
   border-color: var(--accent);
   color: var(--accent);
 }
-.cal-day { line-height: 1; }
-.cal-badge {
-  position: absolute;
-  bottom: 4px;
-  right: 6px;
-  font-size: 10px;
-  line-height: 1;
-  font-family: var(--font-mono);
-  color: inherit;
-  opacity: 0.9;
+/* 「挑战中」：玩家猜过词但未结束（保存进度），视觉上比 is-played 浅一档 */
+.cal-cell.is-inprogress {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
 }
+.cal-cell.is-inprogress.is-current {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.cal-day { line-height: 1; font-weight: 500; }
+.cal-badge {
+  /* 居中展示在 .cal-cell 中 .cal-day 下方（cell 是 column flex） */
+  font-size: 8px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 不同状态的 badge 配色：与 cell 当前色调融合 */
+.cal-badge-unplayed   { color: var(--ink-3); }
+.cal-badge-inprogress { color: var(--accent); font-weight: 500; }
+.cal-badge-revealed   { color: inherit; opacity: 0.85; }
 
 .calendar-legend {
   display: flex;
@@ -1226,6 +1246,7 @@ body.modal-open { overflow: hidden; }
 }
 .legend-dot.is-today   { border-color: var(--accent); }
 .legend-dot.is-current { background: var(--accent-soft); border-color: var(--accent); }
+.legend-dot.is-inprogress { background: #fff7ed; border-color: #fed7aa; }
 .legend-dot.is-played  { background: #f0fdf6; border-color: #b7e7d4; }
 .legend-dot.is-disabled{ background: var(--bg); border-color: var(--line); opacity: 0.6; }
 
