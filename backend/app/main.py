@@ -41,6 +41,8 @@ from .leaderboard.tokens import make_payload
 from .models import (
     CreateGameRequest,
     CreateGameResponse,
+    CustomPuzzleRequest,
+    CustomPuzzleResponse,
     DailyCalendarItem,
     DailyCalendarResponse,
     DailyTodayResponse,
@@ -413,6 +415,47 @@ def peek_puzzle(puzzle_code: str):
         return PuzzlePeekResponse(puzzle_code=code, target_length=0, exists=False)
     return PuzzlePeekResponse(
         puzzle_code=code, target_length=len(target), exists=True
+    )
+
+
+@app.post(
+    "/api/puzzles/encode",
+    response_model=CustomPuzzleResponse,
+    tags=["puzzle"],
+)
+def encode_custom_puzzle(req: CustomPuzzleRequest):
+    """
+    「自定义出题」入口：玩家给一个词，我们校验它是否在高频谜底白名单（target_words.txt）内，
+    然后返回该词对应的 puzzle_code（HMAC 派生），供前端拼分享链接 `?game=XXXXXX` 使用。
+
+    **返回谜底词本身**，因为出题者本来就知道答案；前端拿到后只用来确认创建成功，不应回显给玩家。
+
+    校验规则：
+    - 词长 1-8
+    - 必须只含中文字符
+    - 必须在 target_words.txt（约 1781 词的高频日常词池）内
+      → 这是为了避免拿冷门 / 长尾词作为谜底，导致猜词体验差（邻居稀疏）
+
+    词不在白名单 → 422，前端可提示「不支持创建该词语，请更换词语重新尝试」。
+    """
+    word = (req.word or "").strip()
+    if not word:
+        raise HTTPException(422, "词不能为空")
+
+    # 仅允许中文字符（Unicode CJK 基本区 U+4E00-U+9FFF）
+    if not all("\u4e00" <= ch <= "\u9fff" for ch in word):
+        raise HTTPException(422, "只允许使用汉字")
+
+    # 必须在高频谜底白名单内（也意味着已经预计算过 Top-K 邻居）
+    engine = get_runtime_engine()
+    if not engine.is_common(word):
+        raise HTTPException(422, f"不支持创建该词语：{word}")
+
+    code = encode_word(word)
+    return CustomPuzzleResponse(
+        word=word,
+        puzzle_code=code,
+        target_length=len(word),
     )
 
 

@@ -206,6 +206,51 @@
     </div>
   </div>
 
+  <!-- 「出题」浮层：自定义词语生成分享链接 -->
+  <div id="custom-puzzle-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="custom-puzzle-title">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-panel custom-puzzle-panel" role="document">
+      <header class="modal-head">
+        <h2 id="custom-puzzle-title" class="modal-title">出题给别人猜</h2>
+        <button class="modal-close" type="button" data-close-modal aria-label="关闭">×</button>
+      </header>
+      <form id="custom-puzzle-form" class="custom-puzzle-form" autocomplete="off">
+        <div class="form-row">
+          <label for="custom-puzzle-word" class="form-label">谜底词语</label>
+          <input
+            id="custom-puzzle-word"
+            type="text"
+            inputmode="text"
+            placeholder="输入 2-3 个汉字"
+            maxlength="3"
+            autocomplete="off"
+            spellcheck="false"
+            required
+          />
+          <p class="form-hint">目前仅支持创建词库中已有的高频日常词。</p>
+        </div>
+        <div class="form-row form-row-checks">
+          <label class="form-check">
+            <input id="custom-allow-hint" type="checkbox" checked />
+            <span>允许提示（朋友每局可用 5 次提示）</span>
+          </label>
+          <label class="form-check">
+            <input id="custom-allow-giveup" type="checkbox" checked />
+            <span>允许放弃（朋友可中途揭晓答案）</span>
+          </label>
+        </div>
+        <p id="custom-puzzle-msg" class="custom-puzzle-msg" aria-live="polite"></p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-ghost" data-close-modal>取消</button>
+          <button id="custom-puzzle-submit" type="submit" class="btn btn-primary">创建并复制链接</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 复制反馈 tooltip：跟随鼠标位置展示，2 秒后消失 -->
+  <div id="copy-toast" class="copy-toast" hidden role="status" aria-live="polite"></div>
+
   <script src="./app.js"></script>
 </body>
 </html>

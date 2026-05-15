@@ -179,6 +179,16 @@ class PuzzlePeekResponse(BaseModel):
     exists: bool
 
 
+class CustomPuzzleRequest(BaseModel):
+    word: str = Field(..., min_length=1, max_length=8, description="要作为谜底的词")
+
+
+class CustomPuzzleResponse(BaseModel):
+    word: str
+    puzzle_code: str
+    target_length: int
+
+
 # ---------- 每日挑战 ----------
 
 class DailyTodayResponse(BaseModel):

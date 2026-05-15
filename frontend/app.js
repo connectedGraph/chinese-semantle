@@ -88,6 +88,18 @@ const els = {
   calPrev:          $("cal-prev"),
   calNext:          $("cal-next"),
   calGrid:          $("cal-grid"),
+
+  // custom puzzle modal
+  customPuzzleModal:   $("custom-puzzle-modal"),
+  customPuzzleForm:    $("custom-puzzle-form"),
+  customPuzzleWord:    $("custom-puzzle-word"),
+  customAllowHint:     $("custom-allow-hint"),
+  customAllowGiveup:   $("custom-allow-giveup"),
+  customPuzzleSubmit:  $("custom-puzzle-submit"),
+  customPuzzleMsg:     $("custom-puzzle-msg"),
+
+  // copy-toast：浮窗反馈（复制成功 / 创建成功后的提示）
+  copyToast:           $("copy-toast"),
 };
 
 // ------- state -------
@@ -103,6 +115,10 @@ const state = {
   sortMode: "similarity",
   isFinished: false,
   submitToken: null,
+
+  /** 自定义出题分享链接的能力开关（?hint=0 / ?giveup=0 控制）*/
+  allowHint: true,
+  allowGiveup: true,
 
   /** 后端今日 daily 元信息（首次加载缓存） */
   todayDaily: null,    // { date, puzzle_code, target_length }
@@ -249,8 +265,12 @@ const apiDailyCalendar = (start, end) => {
   if (start) q.set("start", start);
   if (end) q.set("end", end);
   const qs = q.toString();
-  return api("/api/daily/calendar" + (qs ? "?" + qs : ""));
+  return api("/api/daily/calendar" + (qs ? `?${qs}` : ""));
 };
+
+/** 自定义出题：提交一个词，校验 + 返回 puzzle_code。失败时抛出 detail 信息。 */
+const apiEncodeCustomPuzzle = (word) =>
+  api("/api/puzzles/encode", { method: "POST", body: JSON.stringify({ word }) });
 
 // ------- 渲染 -------
 
@@ -333,7 +353,22 @@ function setTargetLenTip(len) {
 function updateHintQuota() {
   const remain = Math.max(0, state.hintLimit - state.hintUsed);
   els.hintQuota.textContent = `(${remain}/${state.hintLimit})`;
-  els.requestHintBtn.disabled = remain === 0 || state.isFinished || !state.currentGame;
+  // 禁用条件：用完 / 已结束 / 没有游戏 / 出题方禁用了提示能力
+  els.requestHintBtn.disabled =
+    remain === 0 || state.isFinished || !state.currentGame || !state.allowHint;
+  if (!state.allowHint) {
+    els.requestHintBtn.title = "本局由出题方禁用了提示功能";
+  } else {
+    els.requestHintBtn.title = "基于你的最佳猜测，自动猜一个更接近答案的词";
+  }
+  // 同步处理放弃按钮
+  if (els.giveupBtn) {
+    els.giveupBtn.disabled =
+      state.isFinished || !state.currentGame || !state.allowGiveup;
+    els.giveupBtn.title = state.allowGiveup
+      ? ""
+      : "本局由出题方禁用了放弃功能";
+  }
 }
 
 function renderPuzzleBadge() {
@@ -447,10 +482,19 @@ function refreshScoringUI() {
 
 // ---- URL 工具 ----
 
-function buildShareUrl(code) {
+/**
+ * 构造分享链接。
+ * @param {string} code  puzzle_code
+ * @param {object} [opts]
+ *   - allowHint  : 是否允许提示（默认 true）。false 时附 ?hint=0
+ *   - allowGiveup: 是否允许放弃（默认 true）。false 时附 ?giveup=0
+ */
+function buildShareUrl(code, opts = {}) {
   const u = new URL(location.href);
   u.search = "";
   u.searchParams.set("game", code);
+  if (opts.allowHint === false) u.searchParams.set("hint", "0");
+  if (opts.allowGiveup === false) u.searchParams.set("giveup", "0");
   return u.toString();
 }
 
@@ -475,6 +519,10 @@ function getUrlParams() {
   return {
     game: u.searchParams.get("game"),
     daily: u.searchParams.get("daily"),
+    // 自定义出题分享链接可携带：?hint=0 禁用提示、?giveup=0 禁用放弃
+    // 缺省视为 "1" → 允许；显式 "0" → 禁用
+    allowHint: u.searchParams.get("hint") !== "0",
+    allowGiveup: u.searchParams.get("giveup") !== "0",
   };
 }
 
@@ -482,12 +530,16 @@ async function copyShareUrl() {
   if (!state.currentGame) return;
   const code = state.currentGame.puzzle_code;
   // daily 局优先分享 ?daily= 链接（社交友好且无作弊风险）
+  // 自定义出题分享：把当前局的 hint/giveup 能力也带上，让接收方看到一致体验
   const url = state.currentGame.source === "daily" && state.currentGame.daily_date
     ? buildDailyUrl(state.currentGame.daily_date)
-    : buildShareUrl(code);
+    : buildShareUrl(code, {
+        allowHint: state.allowHint,
+        allowGiveup: state.allowGiveup,
+      });
   try {
     await navigator.clipboard.writeText(url);
-    flashStatus("分享链接已复制，发给朋友一起猜～");
+    showCopyToast("分享链接已复制，发给朋友一起猜～");
   } catch (_) {
     window.prompt("复制下方链接分享：", url);
   }
@@ -498,6 +550,29 @@ function flashStatus(msg) {
   setTimeout(() => {
     if (els.statusMsg.textContent === msg) setStatus("");
   }, 2400);
+}
+
+/**
+ * 短时浮窗反馈。比 setStatus 更显眼，独立于 #status-msg 区域。
+ * 用于：复制成功、创建成功等需要快速即时反馈的场景。
+ */
+let _copyToastTimer = null;
+function showCopyToast(msg, duration = 2400) {
+  if (!els.copyToast) return;
+  els.copyToast.textContent = msg;
+  els.copyToast.hidden = false;
+  // 强制 reflow 以触发 transition（hidden→visible 直接加 class 不会动画）
+  void els.copyToast.offsetWidth;
+  els.copyToast.classList.add("is-visible");
+  if (_copyToastTimer) clearTimeout(_copyToastTimer);
+  _copyToastTimer = setTimeout(() => {
+    els.copyToast.classList.remove("is-visible");
+    setTimeout(() => {
+      if (!els.copyToast.classList.contains("is-visible")) {
+        els.copyToast.hidden = true;
+      }
+    }, 200);
+  }, duration);
 }
 
 // ---- 历史渲染（与 v0.2 基本一致） ----
@@ -645,6 +720,10 @@ function revealAnswer(target) {
 
 async function giveUp() {
   if (!state.currentGame || state.isFinished) return;
+  if (!state.allowGiveup) {
+    setStatus("本局由出题方禁用了放弃功能。", true);
+    return;
+  }
   if (!confirm("确定放弃本局吗？将揭晓答案。")) return;
   els.giveupBtn.disabled = true;
   try {
@@ -799,12 +878,18 @@ function isValidDateStr(s) {
  *   - puzzle_code: string (shared)
  *   - daily_date: string YYYY-MM-DD (daily)
  *   - silent: bool, 不改 URL（用于 init 时根据 URL 启动）
+ *   - allowHint: bool, 是否允许提示按钮（自定义出题分享链接 ?hint=0 时为 false）
+ *   - allowGiveup: bool, 是否允许放弃按钮（同上）
  */
 async function startNewGame(opts = {}) {
   resetUI();
   els.newGameBtn.disabled = true;
   els.dailyBtn.disabled = true;
   els.calendarBtn.disabled = true;
+
+  // 能力开关：opts 显式传入则用，否则默认全允许
+  state.allowHint = opts.allowHint !== false;
+  state.allowGiveup = opts.allowGiveup !== false;
 
   const mode = opts.mode || (opts.puzzle_code ? "shared" : opts.daily_date ? "daily" : "random");
   setStatus(
@@ -901,6 +986,10 @@ function confirmFirstHint() {
 
 async function requestHint() {
   if (!state.currentGame || state.isFinished) return;
+  if (!state.allowHint) {
+    setStatus("本局由出题方禁用了提示功能。", true);
+    return;
+  }
   if (!confirmFirstHint()) return;
 
   els.requestHintBtn.disabled = true;
@@ -1008,6 +1097,84 @@ function openCalendar() {
 function closeCalendar() {
   els.calendarModal.hidden = true;
   document.body.classList.remove("modal-open");
+}
+
+// ------- 自定义出题浮层 -------
+
+function openCustomPuzzleModal() {
+  if (!els.customPuzzleModal) return;
+  // 重置表单
+  els.customPuzzleWord.value = "";
+  els.customAllowHint.checked = true;
+  els.customAllowGiveup.checked = true;
+  setCustomPuzzleMsg("", null);
+  els.customPuzzleSubmit.disabled = false;
+
+  els.customPuzzleModal.hidden = false;
+  document.body.classList.add("modal-open");
+  // 延迟 focus 等动画稳定后再聚焦
+  setTimeout(() => els.customPuzzleWord.focus(), 50);
+}
+
+function closeCustomPuzzleModal() {
+  if (!els.customPuzzleModal) return;
+  els.customPuzzleModal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
+function setCustomPuzzleMsg(msg, kind /* "error" | "success" | null */) {
+  if (!els.customPuzzleMsg) return;
+  els.customPuzzleMsg.textContent = msg || "";
+  els.customPuzzleMsg.classList.remove("error", "success");
+  if (kind) els.customPuzzleMsg.classList.add(kind);
+}
+
+/**
+ * 提交自定义出题表单。
+ * 流程：客户端校验词形 → 调后端 encode 接口校验白名单 + 拿 puzzle_code
+ *      → 拼带 capability 的 share URL → 复制 → 跳转新游戏。
+ */
+async function submitCustomPuzzle(ev) {
+  if (ev) ev.preventDefault();
+  const word = (els.customPuzzleWord.value || "").trim();
+  if (!word) {
+    setCustomPuzzleMsg("请输入谜底词语", "error");
+    return;
+  }
+  // 客户端预校验：仅汉字，长度 2-3
+  if (!/^[\u4e00-\u9fff]{2,3}$/.test(word)) {
+    setCustomPuzzleMsg("请输入 2-3 个汉字（不允许英文 / 数字 / 标点）", "error");
+    return;
+  }
+  const allowHint = !!els.customAllowHint.checked;
+  const allowGiveup = !!els.customAllowGiveup.checked;
+
+  els.customPuzzleSubmit.disabled = true;
+  setCustomPuzzleMsg("正在创建…", null);
+  try {
+    const data = await apiEncodeCustomPuzzle(word);
+    // 后端验证通过 → 拼分享链接，先复制
+    const url = buildShareUrl(data.puzzle_code, { allowHint, allowGiveup });
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (_) {
+      // 剪贴板权限失败时静默；后续 startNewGame 已经更新了 URL，用户可手动复制
+    }
+    // 关掉模态 + 跳转开局
+    closeCustomPuzzleModal();
+    showCopyToast("分享链接已复制，发给朋友一起猜～");
+    await startNewGame({
+      mode: "shared",
+      puzzle_code: data.puzzle_code,
+      allowHint,
+      allowGiveup,
+    });
+  } catch (err) {
+    // 任何后端 / 网络错误，对用户统一展示为「不支持创建该词语」，
+    // 避免暴露 422 / 404 / Not Found 等技术细节给玩家。
+    setCustomPuzzleMsg("不支持创建该词语，请更换词语重新尝试。", "error");
+    els.customPuzzleSubmit.disabled = false;
+  }
 }
 
 function fmtDate(d) {
@@ -1166,10 +1333,18 @@ function init() {
   els.dailyBtn.addEventListener("click", goToToday);
   els.calendarBtn.addEventListener("click", openCalendar);
   // 「出题」按钮：自定义出题，功能待定
+  // 「出题」按钮：打开自定义出题浮层
   if (els.customPuzzleBtn) {
-    els.customPuzzleBtn.addEventListener("click", () => {
-      setStatus("「出题」功能正在开发中，敬请期待。");
-    });
+    els.customPuzzleBtn.addEventListener("click", openCustomPuzzleModal);
+  }
+  // 自定义出题浮层：表单提交、关闭
+  if (els.customPuzzleModal) {
+    els.customPuzzleForm.addEventListener("submit", submitCustomPuzzle);
+    els.customPuzzleModal.querySelectorAll("[data-close-modal]").forEach((el) =>
+      el.addEventListener("click", closeCustomPuzzleModal)
+    );
+    // 注意：不在 input 事件做实时过滤，否则会吃掉拼音输入法的中间态字符；
+    // 校验统一放在提交时（submitCustomPuzzle）。
   }
 
   // 游戏主流程
@@ -1190,7 +1365,9 @@ function init() {
     el.addEventListener("click", closeCalendar)
   );
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && !els.calendarModal.hidden) closeCalendar();
+    if (ev.key !== "Escape") return;
+    if (!els.calendarModal.hidden) closeCalendar();
+    if (els.customPuzzleModal && !els.customPuzzleModal.hidden) closeCustomPuzzleModal();
   });
 
   // API 文档链接
@@ -1204,7 +1381,12 @@ function init() {
   showLoading();
   const params = getUrlParams();
   if (params.game && isValidPuzzleCode(params.game)) {
-    startNewGame({ mode: "shared", puzzle_code: params.game.toUpperCase() });
+    startNewGame({
+      mode: "shared",
+      puzzle_code: params.game.toUpperCase(),
+      allowHint: params.allowHint,
+      allowGiveup: params.allowGiveup,
+    });
   } else if (params.daily && isValidDateStr(params.daily)) {
     startNewGame({ mode: "daily", daily_date: params.daily });
   } else {

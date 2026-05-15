@@ -1250,6 +1250,105 @@ body.modal-open { overflow: hidden; }
 .legend-dot.is-played  { background: #f0fdf6; border-color: #b7e7d4; }
 .legend-dot.is-disabled{ background: var(--bg); border-color: var(--line); opacity: 0.6; }
 
+/* ---------- 自定义出题浮层 ---------- */
+
+.custom-puzzle-panel {
+  width: 100%;
+  max-width: 420px;
+  padding: 22px 22px 18px;
+}
+
+.custom-puzzle-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 4px;
+}
+
+.form-row { display: flex; flex-direction: column; gap: 6px; }
+.form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.custom-puzzle-form input[type="text"] {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.custom-puzzle-form input[type="text"]:focus {
+  border-color: var(--ink-2);
+}
+.form-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
+.form-row-checks {
+  gap: 10px;
+}
+.form-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+}
+.form-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.custom-puzzle-msg {
+  margin: 0;
+  font-size: 13px;
+  min-height: 18px;
+  color: var(--ink-3);
+}
+.custom-puzzle-msg.error { color: var(--accent); }
+.custom-puzzle-msg.success { color: #047857; }
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+/* ---------- copy-toast：复制成功的浮窗反馈 ---------- */
+
+.copy-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  padding: 10px 16px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s, transform 0.18s;
+  white-space: nowrap;
+  max-width: calc(100vw - 32px);
+}
+.copy-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 540px) {
