@@ -275,9 +275,17 @@ function setStatus(msg, isError = false) {
  *
  * 超过 3 秒还没好 → 文案升级为"服务器正在唤醒，请稍候…"，
  * 让用户明确感知"在做事而非卡住"。
+ *
+ * **本地开发模式下**（localhost / 127.0.0.1）跳过 loading 占位：
+ * - 本地 LocalEngine 启动一次后常驻，API 响应 < 100ms
+ * - 没有冷启动焦虑场景；loading 占位反而干扰开发调试
  */
+const IS_LOCAL_DEV =
+  location.hostname === "localhost" || location.hostname === "127.0.0.1";
+
 let _loadingTimer = null;
 function showLoading() {
+  if (IS_LOCAL_DEV) return;            // 本地开发不展示
   if (!els.loadingPlaceholder) return;
   els.loadingPlaceholder.hidden = false;
   els.loadingTip.classList.remove("is-warming");
@@ -294,6 +302,7 @@ function showLoading() {
   }, 3000);
 }
 function hideLoading() {
+  if (IS_LOCAL_DEV) return;            // 本地开发不展示，无需隐藏
   if (!els.loadingPlaceholder) return;
   els.loadingPlaceholder.hidden = true;
   if (_loadingTimer) {
@@ -1106,7 +1115,6 @@ async function renderCalendar() {
       title = `${dateStr}（挑战中）`;
     } else {
       title = dateStr;
-    }
     }
     cell.title = title;
     cell.innerHTML = `
