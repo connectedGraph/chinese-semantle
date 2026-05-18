@@ -27,31 +27,33 @@
 ### 1. 本地开发（最简）
 
 ```bash
-# 安装依赖（建议虚拟环境，与项目根 requirements.txt 隔离）
+# 一次性初始化（仅首次需要）
 cd <repo-root>
 python -m venv .venv-qqbot && source .venv-qqbot/bin/activate
 pip install -r qqbot/requirements.txt
 
 # 准备配置：复制示例并填入凭据
 cp qqbot/config.example.yaml qqbot/config.yaml
+chmod 600 qqbot/config.yaml
 # 编辑 qqbot/config.yaml，填 appid 与 secret
-
-# 启动（必须从仓库根目录运行，使用 -m 模式以让 qqbot 包能被 import）
-python -m qqbot.bot
 ```
 
-> macOS 用户若遇 `SSLCertVerificationError`，先注入 certifi 提供的 CA bundle：
+之后每次启动**只需一行**（脚本会自动处理：杀残留进程 → 激活 venv → 注入证书 → 启动 bot）：
+
+```bash
+./qqbot/run.sh
+```
+
+`run.sh` 支持从任意目录调用，自动解析仓库根。
+
+> `qqbot/config.yaml` 已加入 `.gitignore`，不会被 commit。
+>
+> 如不想用脚本想手动启动：
 >
 > ```bash
-> pip install --upgrade certifi
+> source .venv-qqbot/bin/activate
 > export SSL_CERT_FILE="$(python -c 'import certifi; print(certifi.where())')"
 > python -m qqbot.bot
-> ```
->
-> `qqbot/config.yaml` 已加入 `.gitignore`，不会被 commit。建议把权限设为 600：
->
-> ```bash
-> chmod 600 qqbot/config.yaml
 > ```
 
 ### 2. 通过环境变量注入凭据（部署推荐）
