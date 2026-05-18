@@ -1,0 +1,29 @@
+# QQ 机器人配置示例
+# 使用方法：cp config.example.yaml config.yaml，然后填入真实凭据
+# 真实 config.yaml 已加入 .gitignore，不会进 Git
+
+# QQ 开放平台凭据（必填）
+# 也可以用环境变量 QQBOT_APPID / QQBOT_APPSECRET 覆盖（部署时推荐用环境变量）
+appid: "你的AppID"
+secret: "你的AppSecret"
+
+# 沙箱模式（开发联调时设为 true，正式发布时设为 false）
+sandbox: false
+
+# 后端 API 地址（已验证 https://semantle.spacekid.me 可用）
+api_base: "https://semantle.spacekid.me"
+
+# 分享链接前缀（用于猜中后的"复制分享链接"按钮跳转）
+share_url_prefix: "https://semantle.spacekid.me/?game="
+
+# 默认猜词历史展示条数（命中谜底时无视该值，全量展示）
+history_top_n: 10
+
+# 单局猜词缓存上限（兜底，超过则只保留最新 N 条用于重放）
+session_history_cap: 500
+
+# 后端请求超时（秒）
+api_timeout: 15
+
+# 日志等级（DEBUG / INFO / WARNING / ERROR）
+log_level: "INFO"

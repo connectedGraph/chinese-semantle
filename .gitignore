@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-*/
 venv/
 .env
 
@@ -35,3 +36,13 @@ backend/data/precomputed/*.sqlite-wal
 
 # Logs
 *.log
+
+# QQ Bot 本地配置（包含 AppID/AppSecret）
+qqbot/config.yaml
+qqbot/nicknames.json
+qqbot/.bot.lock
+qqbot/*.log
+
+# botpy 默认会在 cwd 生成 botpy.log（虽然代码已禁用文件 handler，仍兜底）
+botpy.log
+botpy.log.*
