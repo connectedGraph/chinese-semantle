@@ -1,4 +1,31 @@
-# 部署到 Vercel + Neon
+# 部署指南
+
+> ⚠️ **当前生产环境是 VPS + Docker，不是 Vercel**。
+> 请优先阅读 [DEPLOY-VPS.md](./DEPLOY-VPS.md)。
+> 本文档是开发阶段尝试过的 Vercel + Neon serverless 方案，作为备选保留归档。
+
+## TL;DR — 日常更新一句话
+
+**本机 `git push` 后，SSH 上服务器跑 `./deploy.sh` 一键更新。**
+
+展开就是这两步：
+
+```bash
+# 1. 本机：把改动推到 GitHub
+git push
+
+# 2. 服务器：拉新代码 → 同步前端 → 重建镜像 → 滚动重启 → 健康检查
+ssh ubuntu@81.71.130.80
+cd ~/projects/chinese-semantle && ./deploy.sh
+```
+
+`deploy.sh` 内部做了 5 件事：`git pull` → `rsync` 前端到 `/srv/semantle-frontend/` → `docker compose build` → `docker compose up -d` → `curl /api/health`。完整运维细节、故障排查、Caddy 配置见 [DEPLOY-VPS.md](./DEPLOY-VPS.md)。
+
+---
+
+# 历史归档：部署到 Vercel + Neon
+
+> 以下内容为开发阶段尝试 Vercel serverless 部署时整理的笔记，仅作备选方案保留。生产环境**不再走这条路径**。
 
 本文档记录把猜词游戏部署到 Vercel（计算）+ Neon（Postgres 数据库）的完整步骤。
 

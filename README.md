@@ -2,26 +2,25 @@
 
 一个中文版的 [Semantle](https://semantle.com/) 复刻 —— 通过语义相似度玩猜词游戏。
 
-🎮 **在线试玩**：<https://chinese-semantle.vercel.app/>
+🎮 **在线试玩**：<https://semantle.spacekid.me/>
+🤖 **QQ 机器人**：在 QQ 频道 @小Q猜词
 
 - 🌐 **Web 小游戏**：清爽高级、颜色克制的界面
 - 🔗 **可分享的谜底编号**：每个谜底有稳定的 6 位编号（HMAC 派生，不可反推），URL `?game=XXXXXX` 一键转发同一局
 - 📅 **每日挑战 + 回溯**：每天一题，可回溯任意已发布日期
 - 🏆 **排行榜**：每个谜底单独排行；只接受随机模式且未使用提示的成绩
-- 🤖 **完整 API**：FastAPI + OpenAPI 文档，预留给 QQ 机器人 / Agent Skill
-- ☁️ **一键部署**：Vercel + Neon Postgres；Lambda 包 ~200MB，冷启动 ~3-4 秒
+- 🤖 **完整 API**：FastAPI + OpenAPI 文档，已接入 QQ 机器人，预留 Agent Skill
+- 🐳 **容器化部署**：Docker Compose + Caddy 自动 HTTPS；本机 `git push` 后服务器一行命令热更新
 
 ## 项目结构
 
 ```
 .
-├── api/
-│   └── index.py              # Vercel function 入口（顶层 export FastAPI app）
-├── backend/                  # 业务代码（本地开发也用同一份）
+├── backend/                  # 业务代码（本地开发 + Docker 容器同一份）
 │   ├── app/
 │   │   ├── main.py           # FastAPI 路由
 │   │   ├── engine.py         # LocalEngine（gensim + 词向量，~116MB）
-│   │   ├── engine_light.py   # LightEngine（读预计算邻居 SQLite，~240MB 内存）
+│   │   ├── engine_light.py   # LightEngine（读预计算邻居 SQLite，生产用）
 │   │   ├── engine_base.py    # 引擎抽象与运行时选择器
 │   │   ├── game.py           # 游戏会话
 │   │   ├── daily.py          # 每日挑战 / 日历
@@ -35,23 +34,32 @@
 │   │   ├── target_words.txt  # 构建产物（本地 LocalEngine 加载）
 │   │   ├── daily_pool.txt    # 每日挑战候选池
 │   │   ├── daily_challenges.yaml  # 每日挑战手工配置
-│   │   └── precomputed/      # ⭐ Vercel 部署依赖的预计算数据
+│   │   └── precomputed/      # ⭐ 生产环境（LightEngine）依赖的预计算数据
 │   │       ├── neighbors.sqlite   # 所有谜底的 Top-3000 邻居（~78MB）
 │   │       └── puzzle_codes.json  # code → word 反向表（~32KB）
 │   ├── scripts/
 │   │   ├── build_wordlist.py     # whitelist.txt → target_words.txt
 │   │   └── build_precomputed.py  # ⭐ 生成 precomputed/ 目录
+│   ├── Dockerfile                # 后端容器镜像（Python 3.12-slim）
 │   └── requirements-local.txt    # 本地开发完整依赖（含 gensim）
+├── qqbot/                        # QQ 机器人子项目（独立容器）
+│   ├── bot.py                    # botpy 入口，反向调 backend HTTP API
+│   ├── config.yaml               # appid / token / api_base
+│   └── Dockerfile
 ├── frontend/                     # 静态前端（原生 HTML/CSS/JS，无构建）
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
-├── requirements.txt              # ⭐ Vercel runtime 精简依赖（无 gensim）
-├── vercel.json                   # 路由 + includeFiles 配置
+├── docker-compose.yml            # ⭐ backend + qqbot 编排（生产）
+├── deploy.sh                     # ⭐ 服务器侧一键部署脚本
+├── requirements.txt              # 运行时精简依赖（Docker 容器用）
 ├── .env.example                  # 环境变量样例
-├── DEPLOY.md                     # 部署完整步骤 + 踩坑速查
+├── DEPLOY-VPS.md                 # ⭐ 当前生产部署文档
+├── DEPLOY.md                     # 历史归档：Vercel + Neon serverless 方案
 └── README.md
 ```
+
+> 历史遗留：仓库根目录的 `vercel.json` 和 `api/index.py` 是早期 Vercel 部署的产物，当前生产链路（Docker）不会读取它们；保留作为备选方案。
 
 ## 本地开发
 
@@ -93,13 +101,13 @@ python3 -m http.server 5173
 
 ### 4. 生成预计算数据（首次必做，部署前必做）
 
-LocalEngine 跑通后，为 Vercel 部署做准备：
+LocalEngine 跑通后，为生产环境（LightEngine）准备数据：
 
 ```bash
 cd backend
 source .venv/bin/activate
 
-# ⚠️ 重要：构建期 PUZZLE_SECRET 必须与生产环境 (Vercel) 完全一致
+# ⚠️ 重要：构建期 PUZZLE_SECRET 必须与生产环境 (.env) 完全一致
 # 推荐先生成生产 secret，然后用同一个 secret 跑构建
 export PUZZLE_SECRET="$(openssl rand -base64 32)"
 python -m scripts.build_precomputed --rebuild
@@ -110,9 +118,9 @@ python -m scripts.build_precomputed --rebuild
 - `backend/data/precomputed/neighbors.sqlite`（约 78MB，Top-3000 邻居）
 - `backend/data/precomputed/puzzle_codes.json`（约 32KB）
 
-这两个文件**必须 commit 到仓库**（已在 `.gitignore` 中放行），Vercel 上 LightEngine 会读取它们。
+这两个文件**必须 commit 到仓库**（已在 `.gitignore` 中放行），生产环境的 LightEngine 容器启动时会读取它们。
 
-> **如果改过 secret 或词表**：必须加 `--rebuild`。否则增量构建会让旧 row 残留在 DB 里，体积翻倍。详见 [DEPLOY.md 常见问题](./DEPLOY.md#开局正常但所有词都显示远)。
+> **如果改过 secret 或词表**：必须加 `--rebuild`。否则增量构建会让旧 row 残留在 DB 里，体积翻倍。详见 [DEPLOY-VPS.md](./DEPLOY-VPS.md) 故障排查章节。
 
 ### 5. 扩充白名单 → 重跑构建
 
@@ -123,18 +131,15 @@ PUZZLE_SECRET="生产 secret" python -m scripts.build_precomputed
 # 词表新增时不需要 --rebuild（增量构建）；只在 secret 变更时才需要 --rebuild
 ```
 
-## 部署到 Vercel + Neon
+## 部署
 
-详见 [DEPLOY.md](./DEPLOY.md)。简要步骤：
+当前生产环境：**腾讯云轻量服务器 + Docker Compose + Caddy**（HTTPS 自动签发）+ Neon Postgres。
 
-1. 生成 `PUZZLE_SECRET`：`openssl rand -base64 32`，记下来
-2. 用同一个 secret 跑 `build_precomputed --rebuild`，commit 产物
-3. 把仓库（含 `backend/data/precomputed/`）推送到 GitHub
-4. 在 [Neon](https://neon.tech) 创建 Postgres 项目（推荐 Singapore region）
-5. 在 Vercel 导入仓库，**Framework Preset 选 Other**，设环境变量：
-   - `PUZZLE_SECRET`：第 1 步的同一个 secret
-   - `DATABASE_URL`：Neon 的 Pooled connection
-6. 部署 → `/api/health` 应返回 `{"ok": true, "vocab_size": ...}`
+**最简日常更新**：本机 `git push` → SSH 到服务器 → `cd ~/projects/chinese-semantle && ./deploy.sh`。
+
+完整部署步骤、容器拓扑、运维速查、故障排查见 [DEPLOY-VPS.md](./DEPLOY-VPS.md)。
+
+> 历史方案（Vercel + Neon serverless）见 [DEPLOY.md](./DEPLOY.md)，仅作归档保留。
 
 ## API 速览
 
@@ -166,14 +171,14 @@ code = base32(HMAC-SHA256(PUZZLE_SECRET, target_word)[:4])[:6]
 - **不可反推**：拿到编号反推谜底需要爆破 SECRET 或穷举词典
 - **稳定**：同一个词永远对应同一个编号；白名单增删不影响已有编号
 - **反向查询**：构建期生成 `puzzle_codes.json` 反向表，运行时 O(1) `code → word`
-- ⚠️ **构建期 secret 必须与运行时一致**，否则 sqlite 里的 code 全部对不上 → 整个游戏失灵（详见 [DEPLOY.md](./DEPLOY.md#开局正常但所有词都显示远)）
+- ⚠️ **构建期 secret 必须与运行时一致**，否则 sqlite 里的 code 全部对不上 → 整个游戏失灵（详见 [DEPLOY-VPS.md](./DEPLOY-VPS.md) 故障排查章节）
 
 ### 双引擎架构
 
 | 引擎 | 数据 | 内存 | 启动 | 适用场景 |
 |---|---|---|---|---|
 | LocalEngine | 腾讯词向量 ~116MB | ~500MB | ~3s | 本地开发；扩词后跑 build_precomputed |
-| LightEngine | precomputed/neighbors.sqlite | ~240MB | ~4s | Vercel 部署 |
+| LightEngine | precomputed/neighbors.sqlite | ~1GB | ~4s | 生产部署（Docker 容器） |
 
 两者实现同一个 `EngineProtocol`，业务代码（`game.py`）完全不感知差异。
 
@@ -205,7 +210,7 @@ submit_score → 客户端带 token → 服务端验签 + 校验未过期 + code
 - [x] 可分享谜底编号 + URL
 - [x] 排行榜（Neon + Memory 双后端）
 - [x] 完整 API + OpenAPI 文档
-- [x] Vercel 部署
+- [x] Vercel 部署（已迁移到 VPS / Docker）
 - [x] 每日挑战 + 历史回溯
-- [ ] QQ 机器人接入（player_name 字段已预留）
+- [x] QQ 机器人接入（@小Q猜词）
 - [ ] 词表运营化界面
