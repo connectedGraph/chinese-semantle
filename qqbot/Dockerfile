@@ -13,6 +13,10 @@
 
 FROM python:3.11-slim
 
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_INDEX_URL=https://mirrors.tencent.com/pypi/simple
+
 WORKDIR /app
 
 # 仅安装 qqbot 依赖（与 backend 完全隔离）

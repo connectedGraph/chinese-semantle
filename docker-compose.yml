@@ -1,0 +1,73 @@
+# Chinese Semantle - VPS 部署编排
+#
+# 使用：
+#   1. 在同目录放好 .env（参考 .env.example）
+#   2. 确保已存在 docker network "web"（与 ~/projects/caddy 共享）
+#   3. docker compose up -d --build
+#
+# 目录结构：
+#   ~/projects/chinese-semantle/
+#   ├── docker-compose.yml      ← 本文件
+#   ├── .env                    ← 敏感凭据（不进 Git）
+#   ├── backend/
+#   │   ├── Dockerfile
+#   │   └── data/precomputed/   ← LightEngine 数据，clone 仓库就有
+#   ├── qqbot/
+#   │   ├── Dockerfile
+#   │   ├── config.yaml         ← 本地修改 api_base 为 http://backend:8000
+#   │   └── nicknames.json      ← 持久化文件（容器外挂载）
+#   └── requirements.txt        ← 后端精简依赖（被 backend/Dockerfile 引用）
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: semantle-backend:latest
+    container_name: semantle-backend
+    restart: always
+    environment:
+      # 引擎模式（强制 light，省内存）
+      SEMANTLE_ENGINE: light
+      # 来自 .env
+      PUZZLE_SECRET: ${PUZZLE_SECRET}
+      DATABASE_URL: ${DATABASE_URL}
+      TZ: Asia/Shanghai
+    networks:
+      - web
+    deploy:
+      resources:
+        limits:
+          # 注意：LightEngine 会把全部 1781 个 puzzle 的邻居 dict 解压进内存缓存，
+          # 稳态 RSS ~1GB（不像 Vercel lambda 那样按需懒装载）。1200M 留 200M 余量。
+          memory: 1200M
+
+  qqbot:
+    build:
+      context: .
+      dockerfile: qqbot/Dockerfile
+    image: semantle-qqbot:latest
+    container_name: semantle-qqbot
+    restart: always
+    environment:
+      QQBOT_APPID: ${QQBOT_APPID}
+      QQBOT_APPSECRET: ${QQBOT_APPSECRET}
+      TZ: Asia/Shanghai
+    volumes:
+      # 挂载配置文件（api_base 指向容器内网的 backend:8000）
+      - ./qqbot/config.yaml:/app/qqbot/config.yaml:ro
+      # 持久化运行时数据（用户昵称等）
+      - ./qqbot/nicknames.json:/app/qqbot/nicknames.json
+    depends_on:
+      backend:
+        condition: service_healthy   # 等 backend healthcheck 通过再起 bot
+    networks:
+      - web
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  web:
+    external: true
