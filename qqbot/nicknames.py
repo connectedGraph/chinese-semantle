@@ -16,7 +16,13 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PATH = Path(__file__).resolve().parent / "nicknames.json"
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+DEFAULT_PATH = _DATA_DIR / "nicknames.json"
+
+# 兼容旧路径：早期版本把 nicknames.json 直接放在 qqbot/ 下，
+# 通过 docker-compose 单文件 bind mount 进容器。
+# 单文件挂载点不允许 rename(2) 替换（EBUSY），现已改为挂载 data/ 目录。
+_LEGACY_PATH = Path(__file__).resolve().parent / "nicknames.json"
 
 
 class NicknameStore:
@@ -38,6 +44,20 @@ class NicknameStore:
         self._load()
 
     def _load(self) -> None:
+        # 一次性迁移：旧版本把文件放在 qqbot/nicknames.json，
+        # 现在挂载点是 qqbot/data/，把旧数据搬过来（仅当新位置不存在时）。
+        if (
+            self._path == DEFAULT_PATH
+            and not self._path.exists()
+            and _LEGACY_PATH.exists()
+        ):
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                _LEGACY_PATH.replace(self._path)
+                logger.info("migrated legacy nicknames.json → %s", self._path)
+            except Exception as e:  # pragma: no cover
+                logger.warning("legacy nickname migration failed: %s", e)
+
         if not self._path.exists():
             return
         try:

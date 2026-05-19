@@ -40,6 +40,8 @@ backend/data/precomputed/*.sqlite-wal
 # QQ Bot 本地配置（包含 AppID/AppSecret）
 qqbot/config.yaml
 qqbot/nicknames.json
+qqbot/data/*
+!qqbot/data/.gitkeep
 qqbot/.bot.lock
 qqbot/*.log
 

@@ -15,7 +15,7 @@
 #   ├── qqbot/
 #   │   ├── Dockerfile
 #   │   ├── config.yaml         ← 本地修改 api_base 为 http://backend:8000
-#   │   └── nicknames.json      ← 持久化文件（容器外挂载）
+#   │   └── data/               ← 持久化目录（容器外挂载，含 nicknames.json）
 #   └── requirements.txt        ← 后端精简依赖（被 backend/Dockerfile 引用）
 
 services:
@@ -56,8 +56,11 @@ services:
     volumes:
       # 挂载配置文件（api_base 指向容器内网的 backend:8000）
       - ./qqbot/config.yaml:/app/qqbot/config.yaml:ro
-      # 持久化运行时数据（用户昵称等）
-      - ./qqbot/nicknames.json:/app/qqbot/nicknames.json
+      # 持久化运行时数据目录（用户昵称等）。
+      # 注意必须挂目录，不要挂单个 nicknames.json 文件 ——
+      # 单文件 bind mount 是独立挂载点，不允许 rename(2) 替换（EBUSY），
+      # 会让 nicknames.py 的原子写（tempfile + os.replace）失败。
+      - ./qqbot/data:/app/qqbot/data
     depends_on:
       backend:
         condition: service_healthy   # 等 backend healthcheck 通过再起 bot

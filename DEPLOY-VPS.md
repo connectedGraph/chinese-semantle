@@ -118,7 +118,7 @@ docker compose up -d --force-recreate  # 必须重建，不能 restart（restart
 | `~/projects/chinese-semantle/docker-compose.yml` | backend + qqbot 编排 |
 | `~/projects/chinese-semantle/.env` | 敏感凭据（**不进 Git**，权限 600） |
 | `~/projects/chinese-semantle/qqbot/config.yaml` | bot 配置（`api_base: http://backend:8000`，**与本地不同**） |
-| `~/projects/chinese-semantle/qqbot/nicknames.json` | 用户昵称持久化（容器重建不会丢） |
+| `~/projects/chinese-semantle/qqbot/data/nicknames.json` | 用户昵称持久化（容器外挂载 `qqbot/data/` 目录，重建不会丢） |
 | `/srv/semantle-frontend/` | 前端静态文件，由 deploy.sh rsync 同步 |
 | `/var/lib/docker/volumes/caddy_caddy_data/` | Let's Encrypt 证书存储（永远别删） |
 
@@ -171,7 +171,7 @@ docker compose -f ~/projects/chinese-semantle/docker-compose.yml up -d
 - [ ] 禁用密码登录：`sudo vim /etc/ssh/sshd_config` → `PasswordAuthentication no` → `sudo systemctl reload sshd`
 - [ ] fail2ban 防 SSH 爆破：`sudo apt install -y fail2ban && sudo systemctl enable --now fail2ban`
 - [ ] 定期 `docker image prune -f` 清理旧镜像
-- [ ] 偶尔备份 `~/projects/chinese-semantle/qqbot/nicknames.json`（或长期改存 Postgres）
+- [ ] 偶尔备份 `~/projects/chinese-semantle/qqbot/data/nicknames.json`（或长期改存 Postgres）
 
 ## 加新项目的标准动作
 
