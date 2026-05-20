@@ -19,6 +19,10 @@ backend/data/*.bin
 !backend/data/blacklist_memo.txt
 !backend/data/README.md
 
+# 每日挑战词汇配置（含未来谜底，避免泄露给玩家）
+# 仓库里只保留 daily_challenges.example.yaml 作为格式参考
+backend/data/daily_challenges.yaml
+
 # Keep precomputed data in repo (so Vercel can run without 1GB embedding)
 !backend/data/precomputed/
 # 但忽略 SQLite WAL 模式的临时文件
@@ -36,6 +40,10 @@ backend/data/precomputed/*.sqlite-wal
 
 # Logs
 *.log
+
+# 作者私人运维笔记（含真实 IP / SSH 命令，不进 Git）
+DEPLOY-VPS.md
+deploy.sh
 
 # QQ Bot 本地配置（包含 AppID/AppSecret）
 qqbot/config.yaml

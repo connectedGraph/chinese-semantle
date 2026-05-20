@@ -1,7 +1,7 @@
 # 中文猜词 QQ 机器人（qqbot）
 
 把 [chinese-semantle](../) 的猜词游戏接入 QQ 群 / 私聊。
-**独立子项目，与 `backend/` 解耦**：通过 HTTP 调用现有线上后端（默认 `https://semantle.spacekid.me`），不影响项目根的 GitHub + Vercel 部署。
+**独立子项目，与 `backend/` 解耦**：通过 HTTP 调用现有线上后端（默认 `https://semantle.spacekid.me`），fork 后改 `api_base` 即可指向自己的部署。
 
 ---
 
@@ -136,17 +136,17 @@ sudo journalctl -u semantle-qqbot -f
 
 ## 架构与设计要点
 
-### 与现有 Vercel 部署的隔离
+### 与 backend 的隔离
 
-- **物理隔离**：`qqbot/` 不在 `vercel.json` 的 builds/routes 中，新增不会被 Vercel build 拉入 lambda（不受 250MB 限制影响）
+- **物理隔离**：`qqbot/` 是独立目录、独立容器（见根目录 `docker-compose.yml`），与 backend 通过 docker 内网或公网 HTTP 通信
 - **依赖隔离**：`qqbot/requirements.txt` 与项目根 `requirements.txt` 完全独立
-- **构建隔离**：bot 不消费 `backend/data/precomputed/`，不参与现有 build_precomputed 流水线
+- **构建隔离**：bot 不消费 `backend/data/precomputed/`，不参与 build_precomputed 流水线
 - **可移性**：将来想拆出独立仓库 → 整目录搬走即可（零跨目录引用）
 
 ### 进程模型
 
 - botpy WebSocket 客户端模式，**不需要公网入口**（出向 HTTPS 即可）
-- 长连接进程，**不能放在 Vercel/serverless** 上；推荐 Docker/systemd/Cloud Studio 长驻容器
+- 长连接进程，**不能放在 serverless 平台**（如 Vercel/Lambda）上；推荐 Docker / systemd 长驻容器
 - 全程使用**被动回复**（每条用户消息携带 `msg_id`），规避主动消息每月每群 4 条上限
 
 ### 会话状态

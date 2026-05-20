@@ -3,14 +3,14 @@
 一个中文版的 [Semantle](https://semantle.com/) 复刻 —— 通过语义相似度玩猜词游戏。
 
 🎮 **在线试玩**：<https://semantle.spacekid.me/>
-🤖 **QQ 机器人**：在 QQ 频道 @小Q猜词
+🤖 **QQ 机器人**：搜索 QQ 号 `4018507197` 添加好友，支持私聊单挑 / 拉进群多人协作
 
 - 🌐 **Web 小游戏**：清爽高级、颜色克制的界面
 - 🔗 **可分享的谜底编号**：每个谜底有稳定的 6 位编号（HMAC 派生，不可反推），URL `?game=XXXXXX` 一键转发同一局
 - 📅 **每日挑战 + 回溯**：每天一题，可回溯任意已发布日期
 - 🏆 **排行榜**：每个谜底单独排行；只接受随机模式且未使用提示的成绩
 - 🤖 **完整 API**：FastAPI + OpenAPI 文档，已接入 QQ 机器人，预留 Agent Skill
-- 🐳 **容器化部署**：Docker Compose + Caddy 自动 HTTPS；本机 `git push` 后服务器一行命令热更新
+- 🐳 **容器化部署**：Docker Compose + Caddy 自动 HTTPS，3 个独立容器（backend / qqbot / caddy）共享一个网络
 
 ## 项目结构
 
@@ -50,16 +50,14 @@
 │   ├── index.html
 │   ├── styles.css
 │   └── app.js
-├── docker-compose.yml            # ⭐ backend + qqbot 编排（生产）
-├── deploy.sh                     # ⭐ 服务器侧一键部署脚本
+├── docker-compose.yml            # backend + qqbot 容器编排
 ├── requirements.txt              # 运行时精简依赖（Docker 容器用）
 ├── .env.example                  # 环境变量样例
-├── DEPLOY-VPS.md                 # ⭐ 当前生产部署文档
-├── DEPLOY.md                     # 历史归档：Vercel + Neon serverless 方案
+├── DEPLOY.md                     # 部署指南（VPS + Docker + Caddy）
 └── README.md
 ```
 
-> 历史遗留：仓库根目录的 `vercel.json` 和 `api/index.py` 是早期 Vercel 部署的产物，当前生产链路（Docker）不会读取它们；保留作为备选方案。
+> 历史遗留：仓库根目录的 `vercel.json` 和 `api/index.py` 是早期 Vercel serverless 部署的产物，Docker 部署链路不会读取它们；保留作为备选方案。
 
 ## 本地开发
 
@@ -118,9 +116,9 @@ python -m scripts.build_precomputed --rebuild
 - `backend/data/precomputed/neighbors.sqlite`（约 78MB，Top-3000 邻居）
 - `backend/data/precomputed/puzzle_codes.json`（约 32KB）
 
-这两个文件**必须 commit 到仓库**（已在 `.gitignore` 中放行），生产环境的 LightEngine 容器启动时会读取它们。
+这两个文件**必须 commit 到仓库**（已在 `.gitignore` 中放行），LightEngine 容器启动时会读取它们。
 
-> **如果改过 secret 或词表**：必须加 `--rebuild`。否则增量构建会让旧 row 残留在 DB 里，体积翻倍。详见 [DEPLOY-VPS.md](./DEPLOY-VPS.md) 故障排查章节。
+> **如果改过 secret 或词表**：必须加 `--rebuild`。否则增量构建会让旧 row 残留在 DB 里，体积翻倍。详见 [DEPLOY.md](./DEPLOY.md) 故障排查章节。
 
 ### 5. 扩充白名单 → 重跑构建
 
@@ -133,13 +131,7 @@ PUZZLE_SECRET="生产 secret" python -m scripts.build_precomputed
 
 ## 部署
 
-当前生产环境：**腾讯云轻量服务器 + Docker Compose + Caddy**（HTTPS 自动签发）+ Neon Postgres。
-
-**最简日常更新**：本机 `git push` → SSH 到服务器 → `cd ~/projects/chinese-semantle && ./deploy.sh`。
-
-完整部署步骤、容器拓扑、运维速查、故障排查见 [DEPLOY-VPS.md](./DEPLOY-VPS.md)。
-
-> 历史方案（Vercel + Neon serverless）见 [DEPLOY.md](./DEPLOY.md)，仅作归档保留。
+VPS + Docker Compose + Caddy（HTTPS 自动签发）+ Postgres（推荐 Neon）。完整步骤、容器编排、故障排查见 [DEPLOY.md](./DEPLOY.md)。
 
 ## API 速览
 
@@ -171,7 +163,7 @@ code = base32(HMAC-SHA256(PUZZLE_SECRET, target_word)[:4])[:6]
 - **不可反推**：拿到编号反推谜底需要爆破 SECRET 或穷举词典
 - **稳定**：同一个词永远对应同一个编号；白名单增删不影响已有编号
 - **反向查询**：构建期生成 `puzzle_codes.json` 反向表，运行时 O(1) `code → word`
-- ⚠️ **构建期 secret 必须与运行时一致**，否则 sqlite 里的 code 全部对不上 → 整个游戏失灵（详见 [DEPLOY-VPS.md](./DEPLOY-VPS.md) 故障排查章节）
+- ⚠️ **构建期 secret 必须与运行时一致**，否则 sqlite 里的 code 全部对不上 → 整个游戏失灵（详见 [DEPLOY.md](./DEPLOY.md) 故障排查章节）
 
 ### 双引擎架构
 
@@ -212,5 +204,5 @@ submit_score → 客户端带 token → 服务端验签 + 校验未过期 + code
 - [x] 完整 API + OpenAPI 文档
 - [x] Vercel 部署（已迁移到 VPS / Docker）
 - [x] 每日挑战 + 历史回溯
-- [x] QQ 机器人接入（@小Q猜词）
+- [x] QQ 机器人接入（QQ 号 4018507197，私聊 / 群聊均可）
 - [ ] 词表运营化界面
