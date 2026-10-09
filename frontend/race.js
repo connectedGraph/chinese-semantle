@@ -1,4 +1,4 @@
-/* Agent 对战前端逻辑：默认遮蔽 Agent 思考，点按钮才展开 */
+/* Agent 猜词前端逻辑：支持「人机对战」与「我出题」两种模式 */
 (function () {
   "use strict";
 
@@ -7,14 +7,23 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     status: $("status"),
+    sub: $("sub"),
+    btnMode: $("btn-mode"),
     btnNew: $("btn-new"),
     banner: $("banner"),
+    humanTitle: $("human-title"),
+    humanMeta: $("human-meta"),
     humanForm: $("human-form"),
     humanInput: $("human-input"),
+    humanTableWrap: $("human-table-wrap"),
     humanRows: $("human-rows"),
     humanCount: $("human-count"),
     humanBest: $("human-best"),
     btnGiveup: $("btn-giveup"),
+    challengeSetup: $("challenge-setup"),
+    challengeInput: $("challenge-input"),
+    challengeTip: $("challenge-tip"),
+    btnChallengeStart: $("btn-challenge-start"),
     agentRows: $("agent-rows"),
     agentLog: $("agent-log"),
     agentCount: $("agent-count"),
@@ -26,6 +35,7 @@
   };
 
   const state = {
+    mode: "versus", // versus | challenge
     raceId: null,
     es: null,
     finished: false,
@@ -85,7 +95,6 @@
     els.agentCount.textContent = state.agentGuesses || state.agent.size;
     const hb = best(state.human), ab = best(state.agent);
     els.humanBest.textContent = hb ? `${hb.word} ${pctText(hb)}%` : "-";
-    // Agent 遮蔽时连「最佳」也不能显示词名/百分比——否则等于直接泄露答案
     if (state.showAgent) {
       els.agentBest.textContent = ab ? `${ab.word} ${pctText(ab)}%` : "-";
     } else {
@@ -110,14 +119,61 @@
     updateStats();
   }
 
-  // ---------- 新对局 ----------
+  // ---------- 模式 ----------
+
+  function applyMode() {
+    const challenge = state.mode === "challenge";
+    els.btnMode.textContent = challenge ? "模式：我出题" : "模式：人机对战";
+    els.btnNew.textContent = challenge ? "开始出题" : "开始新对局";
+    els.sub.textContent = challenge ? "你出题 · DeepSeek 来猜" : "你 vs DeepSeek · 比谁猜中的次数少";
+    els.humanTitle.textContent = challenge ? "出题" : "你";
+    els.humanMeta.hidden = challenge;
+    els.btnGiveup.hidden = challenge;
+    els.challengeSetup.hidden = !challenge;
+    els.challengeTip.hidden = !challenge;
+    els.humanForm.hidden = challenge;
+    els.humanTableWrap.hidden = challenge;
+  }
+
+  function toggleMode() {
+    if (state.raceId && !state.finished) return; // 对局进行中不允许切模式
+    state.mode = state.mode === "versus" ? "challenge" : "versus";
+    applyMode();
+    initIdle();
+  }
+
+  // ---------- 待机 ----------
+
+  function initIdle() {
+    if (state.es) { state.es.close(); state.es = null; }
+    state.raceId = null; state.finished = false; state.humanDone = false;
+    state.humanGuesses = 0; state.agentGuesses = 0; state.steps = 0;
+    state.human.clear(); state.agent.clear();
+    applyMode();
+    els.status.textContent = state.mode === "challenge"
+      ? "输入答案，点「让 Agent 猜」"
+      : "点击「开始新对局」（目标默认 2 字）";
+    els.humanInput.value = "";
+    els.humanInput.disabled = true;
+    els.humanForm.querySelector("button").disabled = true;
+    els.btnGiveup.disabled = true;
+    els.btnChallengeStart.disabled = false;
+    els.btnNew.disabled = false;
+    els.btnMode.disabled = false;
+    els.banner.hidden = true;
+    els.agentLog.innerHTML = '<div class="empty">等待开始…</div>';
+    setAgentVisible(state.mode === "challenge");
+    renderTable(els.humanRows, state.human, "还没有猜测");
+    renderTable(els.agentRows, state.agent, "等待开始");
+    updateStats();
+  }
+
+  // ---------- 开始对局 / 出题 ----------
 
   async function newRace() {
     if (state.es) state.es.close();
-    Object.assign(state, {
-      raceId: null, finished: false, humanDone: false,
-      humanGuesses: 0, agentGuesses: 0, steps: 0,
-    });
+    state.raceId = null; state.finished = false; state.humanDone = false;
+    state.humanGuesses = 0; state.agentGuesses = 0; state.steps = 0;
     state.human.clear(); state.agent.clear();
     els.agentLog.innerHTML = '<div class="empty">初始化…</div>';
     els.banner.hidden = true;
@@ -125,22 +181,44 @@
     els.humanInput.disabled = false;
     els.humanForm.querySelector("button").disabled = false;
     els.btnGiveup.disabled = false;
-    setAgentVisible(false);
+    els.btnChallengeStart.disabled = true;
+    els.btnMode.disabled = true;
+    setAgentVisible(state.mode === "challenge");
     renderTable(els.humanRows, state.human, "还没有猜测");
     renderTable(els.agentRows, state.agent, "还没有猜测");
     updateStats();
 
-    const resp = await fetch(API + "/api/agent/race", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ min_word_len: 2, max_word_len: 2, max_steps: 12 }),
-    });
-    if (!resp.ok) { addLog("创建对局失败: " + (await resp.text()), "log-error"); return; }
-    const race = await resp.json();
+    const body = { min_word_len: 2, max_word_len: 2, max_steps: 12, mode: state.mode };
+    if (state.mode === "challenge") {
+      const w = (els.challengeInput.value || "").trim();
+      if (w) body.target_word = w;
+    }
+
+    let race;
+    try {
+      const resp = await fetch(API + "/api/agent/race", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      if (!resp.ok) {
+        els.banner.hidden = false; els.banner.className = "banner";
+        els.banner.textContent = "创建失败：" + (await resp.text());
+        initIdle();
+        return;
+      }
+      race = await resp.json();
+    } catch (e) {
+      els.banner.hidden = false; els.banner.className = "banner";
+      els.banner.textContent = "创建失败：" + e;
+      initIdle();
+      return;
+    }
+
     state.raceId = race.race_id;
-    els.status.textContent = `目标 ${race.target_length} 字 · 比谁猜中用的次数少`;
+    els.status.textContent = state.mode === "challenge"
+      ? `已出题（${race.target_length} 字）· Agent 开始解题`
+      : `目标 ${race.target_length} 字 · 比谁猜中用的次数少`;
     els.agentLog.innerHTML = "";
-    addLog(`<span class="step-tag">系统</span> 新对局开始，目标 <b>${race.target_length}</b> 个字`);
+    addLog(`<span class="step-tag">系统</span> ${state.mode === "challenge" ? "出题" : "新对局"}开始，目标 <b>${race.target_length}</b> 个字`);
 
     state.es = new EventSource(`${API}/api/agent/race/${state.raceId}/events`);
     state.es.onmessage = (e) => { try { handle(JSON.parse(e.data)); } catch (err) { console.error(err); } };
@@ -161,7 +239,6 @@
         state.humanDone = !!ev.human_done;
         renderTable(els.humanRows, state.human, "还没有猜测");
         renderTable(els.agentRows, state.agent, "还没有猜测");
-        if (state.humanDone) lockHuman();
         updateStats();
         break;
       case "start":
@@ -206,9 +283,11 @@
       case "agent_done":
         state.agentGuesses = ev.guesses || state.agentGuesses;
         state.steps = ev.steps || state.steps;
-        els.status.textContent = ev.solved
-          ? `Agent 已猜中，用了 ${ev.guesses} 次 · 你继续`
-          : `Agent 结束（未猜中，${ev.guesses} 次）· 你继续`;
+        if (state.mode === "versus") {
+          els.status.textContent = ev.solved
+            ? `Agent 已猜中，用了 ${ev.guesses} 次 · 你继续`
+            : `Agent 结束（未猜中，${ev.guesses} 次）· 你继续`;
+        }
         addLog(`<span class="step-tag">Agent 完成</span> ${ev.solved ? "猜中" : "未猜中"}，共 ${ev.guesses} 次猜测 / ${ev.steps} 步`);
         updateStats();
         break;
@@ -231,7 +310,21 @@
   function showEnd(ev) {
     els.status.textContent = "对局结束";
     els.banner.hidden = false;
-    setAgentVisible(true); // 结束自动揭晓 Agent 的全部思路与结果
+    setAgentVisible(true);
+    els.btnMode.disabled = false;
+    els.btnNew.disabled = false;
+    els.btnChallengeStart.disabled = false;
+
+    if (ev.solo || state.mode === "challenge") {
+      const solved = !!ev.agent_solved;
+      els.banner.className = "banner" + (solved ? " win" : " lose");
+      els.banner.innerHTML = solved
+        ? `🤖 Agent 用 <b>${ev.agent_guesses}</b> 次猜测 / ${ev.agent_steps} 步，猜中了「${escapeHtml(ev.target)}」`
+        : `🤖 Agent 没能猜中「${escapeHtml(ev.target)}」（用了 ${ev.agent_guesses} 次 / ${ev.agent_steps} 步）`;
+      addLog(`<span class="step-tag">结算</span> 出题模式 · 答案「${escapeHtml(ev.target)}」· Agent ${ev.agent_guesses} 次 / ${ev.agent_steps} 步`);
+      return;
+    }
+
     const hg = ev.human_guesses, ag = ev.agent_guesses;
     const detail = `答案「${escapeHtml(ev.target)}」 · 你 ${hg} 次${ev.human_solved ? "" : "（未猜中）"} / Agent ${ag} 次${ev.agent_solved ? "" : "（未猜中）"} · Agent ${ev.agent_steps} 步`;
     if (ev.winner === "human") {
@@ -250,14 +343,12 @@
   // ---------- 人类操作 ----------
 
   async function humanGuess(word) {
-    if (!state.raceId || state.humanDone) return;
+    if (!state.raceId || state.humanDone || state.mode === "challenge") return;
     word = (word || "").trim();
     if (!word) return;
     try {
       const resp = await fetch(`${API}/api/agent/race/${state.raceId}/guess`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ word }),
       });
       if (!resp.ok) {
         els.banner.hidden = false; els.banner.className = "banner";
@@ -267,13 +358,16 @@
   }
 
   async function giveup() {
-    if (!state.raceId || state.humanDone) return;
+    if (!state.raceId || state.humanDone || state.mode === "challenge") return;
     await fetch(`${API}/api/agent/race/${state.raceId}/giveup`, { method: "POST" });
   }
 
   // ---------- 绑定 ----------
 
+  els.btnMode.addEventListener("click", toggleMode);
   els.btnNew.addEventListener("click", newRace);
+  els.btnChallengeStart.addEventListener("click", newRace);
+  els.challengeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") newRace(); });
   els.btnToggleAgent.addEventListener("click", () => setAgentVisible(!state.showAgent));
   els.btnGiveup.addEventListener("click", giveup);
   els.humanForm.addEventListener("submit", (e) => {
@@ -283,20 +377,5 @@
     humanGuess(w);
   });
 
-  // 不自动开局：打开页面只显示待机状态，点「开始新对局」才创建并启动 Agent
-  function initIdle() {
-    els.status.textContent = "点击「开始新对局」（目标默认 2 字）";
-    els.humanInput.value = "";
-    els.humanInput.disabled = true;
-    els.humanForm.querySelector("button").disabled = true;
-    els.btnGiveup.disabled = true;
-    els.banner.hidden = true;
-    els.agentLog.innerHTML = '<div class="empty">等待开始…</div>';
-    setAgentVisible(false);
-    state.human.clear(); state.agent.clear();
-    renderTable(els.humanRows, state.human, "点击「开始新对局」");
-    renderTable(els.agentRows, state.agent, "等待开始");
-    updateStats();
-  }
   initIdle();
 })();

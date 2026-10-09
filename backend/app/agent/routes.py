@@ -1,7 +1,7 @@
 """Agent 对战相关路由。"""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -13,7 +13,10 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 
 
 class CreateRaceRequest(BaseModel):
-    target_word: Optional[str] = Field(None, description="指定谜底（调试用）；为空则随机")
+    mode: Literal["versus", "challenge"] = Field(
+        "versus", description="versus=人机对战；challenge=我出题给 Agent 猜（只有 Agent 猜）"
+    )
+    target_word: Optional[str] = Field(None, description="指定谜底（challenge 模式即用户出的题）；为空则随机")
     min_word_len: int = Field(2, ge=1, le=8)
     max_word_len: int = Field(2, ge=1, le=8, description="目标词最大长度，默认 2")
     max_steps: int = Field(12, ge=1, le=50, description="Agent 最多对话回合数")
@@ -34,6 +37,7 @@ async def create_race(req: CreateRaceRequest = CreateRaceRequest()):
             max_word_len=req.max_word_len,
             target_word=req.target_word,
             max_steps=req.max_steps,
+            solo=(req.mode == "challenge"),
         )
     except ValueError as e:
         raise HTTPException(422, str(e))
@@ -62,6 +66,8 @@ async def human_guess(race_id: str, req: HumanGuessRequest):
     race = get_manager().get(race_id)
     if not race:
         raise HTTPException(404, "race not found")
+    if race.solo:
+        raise HTTPException(400, "出题模式下人类不参与猜词")
     if race.human_done:
         raise HTTPException(400, "你这边已经结束（猜中或已放弃）")
     try:
@@ -77,6 +83,8 @@ async def giveup(race_id: str):
     race = get_manager().get(race_id)
     if not race:
         raise HTTPException(404, "race not found")
+    if race.solo:
+        raise HTTPException(400, "出题模式下没有人类放弃")
     return await race.human_giveup()
 
 

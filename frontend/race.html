@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agent 对战 · 中文语义猜词</title>
+  <title>Agent 猜词 · 中文语义猜词</title>
   <link rel="stylesheet" href="race.css" />
 </head>
 <body>
   <header class="race-header">
     <div class="brand">
       <span class="dot"></span>
-      <h1>Agent 对战</h1>
-      <span class="sub">你 vs DeepSeek · 比谁猜中的次数少</span>
+      <h1>Agent 猜词</h1>
+      <span class="sub" id="sub">你 vs DeepSeek · 比谁猜中的次数少</span>
     </div>
     <div class="controls">
       <span id="status" class="status">未开始</span>
+      <button id="btn-mode" class="btn" type="button">模式：人机对战</button>
       <button id="btn-new" class="btn primary">开始新对局</button>
     </div>
   </header>
@@ -24,15 +25,26 @@
   <main class="race-grid">
     <section class="panel human">
       <div class="panel-head">
-        <h2>你</h2>
-        <span class="meta">猜测 <b id="human-count">0</b> · 最佳 <b id="human-best">-</b></span>
+        <h2 id="human-title">你</h2>
+        <span class="meta" id="human-meta">猜测 <b id="human-count">0</b> · 最佳 <b id="human-best">-</b></span>
         <button id="btn-giveup" class="btn small" type="button">放弃</button>
       </div>
+
+      <!-- 出题模式：输入答案，让 Agent 猜 -->
+      <div id="challenge-setup" class="guess-form" hidden>
+        <input id="challenge-input" placeholder="输入一个词作为答案，例如：刺猬" autocomplete="off" />
+        <button id="btn-challenge-start" class="btn" type="button">让 Agent 猜</button>
+      </div>
+      <div id="challenge-tip" class="status-note" hidden>
+        你不参与猜测，只是出题并旁观 DeepSeek 解题；可以实时看到它的思考与工具调用。
+      </div>
+
+      <!-- 对战模式：人类猜词 -->
       <form id="human-form" class="guess-form">
         <input id="human-input" placeholder="输入一个中文词，回车提交" autocomplete="off" />
         <button class="btn" type="submit">猜</button>
       </form>
-      <div class="table-wrap">
+      <div class="table-wrap" id="human-table-wrap">
         <table class="result">
           <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>
           <tbody id="human-rows"><tr class="empty"><td colspan="4">还没有猜测</td></tr></tbody>

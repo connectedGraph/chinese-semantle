@@ -1,8 +1,13 @@
 # Agent 对战模式（你 vs DeepSeek）
 
-在原版中文 Semantle 基础上新增的二次开发：让 **DeepSeek Agent** 和你在**同一个隐藏答案**上比赛谁先猜中。
+在原版中文 Semantle 基础上新增的二次开发：让 **DeepSeek Agent** 用工具调用来猜词。有两种模式，页面右上角「模式」按钮切换：
 
-## 玩法
+| 模式 | 说明 |
+|---|---|
+| **人机对战**（versus） | 你和 Agent 猜同一个隐藏答案，**比谁猜中的次数少** |
+| **我出题**（challenge） | 你指定一个词作为答案（或留空随机），Agent 独立解题，你看它表演 |
+
+## 玩法（人机对战）
 
 1. 打开 `frontend/race.html`（本地开发 http://127.0.0.1:5174/race.html）
 2. 点「开始新对局」才开一局（打开页面不会自动调用 Agent，避免白耗 token）；目标词默认 **2 个字**，人类和 Agent 各拿一局**相同谜底**的游戏
@@ -38,7 +43,7 @@ Agent **只有这两个工具**，且都支持并行：
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/agent/race` | 创建对战（body: `target_word?`, `max_steps?`） |
+| POST | `/api/agent/race` | 创建对局（body: `mode?`, `target_word?`, `min_word_len?`, `max_word_len?`, `max_steps?`）；`mode="challenge"` 为出题模式 |
 | POST | `/api/agent/race/{id}/start` | 启动 Agent |
 | GET | `/api/agent/race/{id}` | 对战快照 |
 | POST | `/api/agent/race/{id}/guess` | 人类猜词 |

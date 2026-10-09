@@ -23,13 +23,16 @@ logger = logging.getLogger(__name__)
 
 
 class Race:
-    def __init__(self, store: GameStore, human_game: Game, agent_game: Game, max_steps: int) -> None:
+    def __init__(self, store: GameStore, human_game: Game, agent_game: Game, max_steps: int,
+                 solo: bool = False) -> None:
         self.id = uuid.uuid4().hex[:12]
         self.store = store
         self.human_game = human_game
         self.agent_game = agent_game
         self.target = human_game.target
         self.max_steps = max_steps
+        # solo=True：出题模式，只有 Agent 在猜，人类不参与；Agent 结束即结算
+        self.solo = solo
         self.created_at = datetime.now(timezone.utc)
         self.queue: asyncio.Queue = asyncio.Queue()
         self.started = False
@@ -66,6 +69,7 @@ class Race:
             "human_done": self.human_done,
             "agent_done": self.agent_done,
             "agent_steps": self.agent_steps,
+            "solo": self.solo,
             "human_history": [r.model_dump(mode="json") for r in self.human_game.history],
             "agent_history": [r.model_dump(mode="json") for r in self.agent_game.history],
         }
@@ -155,12 +159,20 @@ class Race:
     async def _maybe_settle(self) -> None:
         if self.finished:
             return
+        if self.solo:
+            # 出题模式：Agent 结束即结算，不等人类
+            if self.agent_done:
+                await self._settle()
+            return
         if self.agent_done and self.human_done:
             await self._settle()
 
     async def _settle(self) -> None:
         hg, ag = self.human_game.guess_count, self.agent_game.guess_count
         hs, asolved = self.human_solved, self.agent_solved
+        if self.solo:
+            await self._end("agent" if asolved else "tie")
+            return
         if hs and asolved:
             winner = "human" if hg < ag else "agent" if ag < hg else "tie"
         elif hs:
@@ -180,6 +192,7 @@ class Race:
         await self.emit({
             "type": "race_end",
             "winner": winner,
+            "solo": self.solo,
             "metric": "guesses",  # 按猜测次数比
             "target": self.target,
             "human_guesses": self.human_game.guess_count,
@@ -234,13 +247,14 @@ class RaceManager:
         max_word_len: int = 2,
         target_word: Optional[str] = None,
         max_steps: int = 12,
+        solo: bool = False,
     ) -> Race:
         base = self.store.create_game(
             min_word_len=min_word_len, max_word_len=max_word_len,
             target_word=target_word, source="shared",
         )
         agent_game = self.store.create_game(target_word=base.target, source="shared")
-        race = Race(self.store, base, agent_game, max_steps=max_steps)
+        race = Race(self.store, base, agent_game, max_steps=max_steps, solo=solo)
         self._races[race.id] = race
         return race
 
