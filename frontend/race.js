@@ -8,6 +8,7 @@
   const els = {
     status: $("status"),
     sub: $("sub"),
+    maxSteps: $("max-steps"),
     btnMode: $("btn-mode"),
     btnNew: $("btn-new"),
     banner: $("banner"),
@@ -179,6 +180,7 @@
     els.btnChallengeStart.disabled = false;
     els.btnNew.disabled = false;
     els.btnMode.disabled = false;
+    els.maxSteps.disabled = false;
     els.banner.hidden = true;
     els.agentLog.innerHTML = '<div class="empty">等待开始…</div>';
     setAgentVisible(state.mode === "challenge");
@@ -202,12 +204,17 @@
     els.btnGiveup.disabled = false;
     els.btnChallengeStart.disabled = true;
     els.btnMode.disabled = true;
+    els.maxSteps.disabled = true;
     setAgentVisible(state.mode === "challenge");
     renderTable(els.humanRows, state.human, "还没有猜测");
     renderTable(els.agentRows, state.agent, "还没有猜测");
     updateStats();
 
-    const body = { min_word_len: 2, max_word_len: 2, max_steps: 12, mode: state.mode };
+    const body = {
+      min_word_len: 2, max_word_len: 2,
+      max_steps: Number(els.maxSteps.value) || 30,
+      mode: state.mode,
+    };
     if (state.mode === "challenge") {
       const w = (els.challengeInput.value || "").trim();
       if (w && !CJK_RE.test(w)) {
@@ -338,6 +345,7 @@
     els.btnMode.disabled = false;
     els.btnNew.disabled = false;
     els.btnChallengeStart.disabled = false;
+    els.maxSteps.disabled = false;
 
     if (ev.solo || state.mode === "challenge") {
       const solved = !!ev.agent_solved;

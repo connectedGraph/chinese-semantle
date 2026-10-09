@@ -130,3 +130,12 @@ tr.target td { background: rgba(53,192,122,.12); }
   background: rgba(255,107,87,.08); border-bottom: 1px solid var(--line);
 }
 .form-error.hidden { display: none; }
+
+/* --- 步数选择 --- */
+.step-pick { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.step-pick select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px; font-size: 13px; outline: none; cursor: pointer;
+}
+.step-pick select:hover { border-color: var(--accent); }
+.step-pick select:disabled { opacity: .5; cursor: not-allowed; }

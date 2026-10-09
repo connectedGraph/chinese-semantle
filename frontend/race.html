@@ -15,6 +15,14 @@
     </div>
     <div class="controls">
       <span id="status" class="status">未开始</span>
+      <label class="step-pick" title="Agent 最多对话回合数（每步可并行猜多个词）">
+        步数
+        <select id="max-steps">
+          <option value="12">12</option>
+          <option value="30" selected>30</option>
+          <option value="50">50</option>
+        </select>
+      </label>
       <button id="btn-mode" class="btn" type="button">模式：人机对战</button>
       <button id="btn-new" class="btn primary">开始新对局</button>
     </div>
