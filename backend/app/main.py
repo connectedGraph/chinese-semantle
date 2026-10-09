@@ -58,6 +58,9 @@ from .models import (
 )
 from .puzzle_codes import decode_code, encode_word
 from . import daily as daily_mod
+from .agent import init_manager as init_agent_manager
+from .agent import get_manager as get_agent_manager
+from .agent.routes import router as agent_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +80,8 @@ async def lifespan(app: FastAPI):
     engine = get_runtime_engine()
     store = GameStore(engine)
     logger.info("Engine ready. Vocab size = %d", engine.vocab_size)
+    # Agent 对战管理器（复用同一个 GameStore）
+    init_agent_manager(store)
     # 排行榜：异步初始化（Postgres 建表）；本地 Memory 是 no-op
     try:
         await get_repo().init()
@@ -84,6 +89,10 @@ async def lifespan(app: FastAPI):
         logger.warning("Leaderboard init failed (will retry on use): %s", e)
     yield
     logger.info("Shutting down.")
+    try:
+        await get_agent_manager().close_all()
+    except Exception:  # noqa: BLE001
+        pass
     try:
         await get_repo().close()
     except Exception:  # noqa: BLE001
@@ -104,6 +113,8 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+
+app.include_router(agent_router)
 
 app.add_middleware(
     CORSMiddleware,

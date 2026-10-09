@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent 对战 · 中文语义猜词</title>
+  <link rel="stylesheet" href="race.css" />
+</head>
+<body>
+  <header class="race-header">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>Agent 对战</h1>
+      <span class="sub">你 vs DeepSeek</span>
+    </div>
+    <div class="controls">
+      <span id="status" class="status">未开始</span>
+      <button id="btn-new" class="btn primary">开始新对局</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main class="race-grid">
+    <section class="panel human">
+      <div class="panel-head">
+        <h2>你</h2>
+        <span class="meta">猜测 <b id="human-count">0</b> · 最佳 <b id="human-best">-</b></span>
+      </div>
+      <form id="human-form" class="guess-form">
+        <input id="human-input" placeholder="输入一个中文词，回车提交" autocomplete="off" />
+        <button class="btn" type="submit">猜</button>
+      </form>
+      <div class="table-wrap">
+        <table class="result">
+          <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>
+          <tbody id="human-rows"><tr class="empty"><td colspan="4">还没有猜测</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel agent">
+      <div class="panel-head">
+        <h2>DeepSeek Agent</h2>
+        <span class="meta">猜测 <b id="agent-count">0</b> · 最佳 <b id="agent-best">-</b> · 步数 <b id="agent-steps">0</b></span>
+      </div>
+      <div id="agent-log" class="agent-log"><div class="empty">等待开始…</div></div>
+      <div class="table-wrap">
+        <table class="result">
+          <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>
+          <tbody id="agent-rows"><tr class="empty"><td colspan="4">还没有猜测</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // API 地址：本地开发（:5174）指向后端 :8001；部署时设为同源或注入
+    window.SEMANTLE_API_BASE = window.SEMANTLE_API_BASE || "http://127.0.0.1:8001";
+  </script>
+  <script src="race.js"></script>
+</body>
+</html>
