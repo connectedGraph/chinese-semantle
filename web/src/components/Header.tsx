@@ -15,6 +15,8 @@ interface Props {
   theme: Theme;
   onToggleTheme: () => void;
   onNew: () => void;
+  onOpenHistory: () => void;
+  recordCount: number;
   controlsLocked: boolean;
 }
 
@@ -27,6 +29,8 @@ export function Header({
   theme,
   onToggleTheme,
   onNew,
+  onOpenHistory,
+  recordCount,
   controlsLocked,
 }: Props) {
   const subtitle =
@@ -58,6 +62,9 @@ export function Header({
 
         <button className={btn} disabled={controlsLocked} onClick={onToggleMode}>
           模式：{mode === "challenge" ? "我出题" : "人机对战"}
+        </button>
+        <button className={btn} onClick={onOpenHistory} title="出题/游玩记录">
+          记录{recordCount > 0 ? ` (${recordCount})` : ""}
         </button>
         <button className={btn} onClick={onToggleTheme} title="切换日/夜间">
           {theme === "dark" ? "🌙 夜间" : "☀️ 日间"}

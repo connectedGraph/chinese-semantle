@@ -1,9 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Header } from "./components/Header";
 import { HumanPanel } from "./components/HumanPanel";
 import { AgentPanel } from "./components/AgentPanel";
+import { HistoryDrawer } from "./components/HistoryDrawer";
 import { useTheme } from "./hooks/useTheme";
 import { useRace } from "./hooks/useRace";
+import {
+  appendRecord,
+  clearRecords,
+  compactRows,
+  historyStats,
+  loadRecords,
+  type RaceRecord,
+} from "./lib/history";
 
 const CJK_RE = /^[\u4e00-\u9fff]{1,8}$/;
 
@@ -11,6 +20,28 @@ export default function App() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { state, start, guess, giveup, setMode, toggleAgent, clearError, setChallengeError } = useRace();
   const [maxSteps, setMaxSteps] = useState(30);
+  const [records, setRecords] = useState<RaceRecord[]>(() => loadRecords());
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const savedIds = useRef<Set<string>>(new Set());
+
+  // 对局结束时落一条记录（多次渲染也不会重复存）
+  useEffect(() => {
+    if (!state.result || !state.raceId) return;
+    if (savedIds.current.has(state.raceId)) return;
+    savedIds.current.add(state.raceId);
+    const rec: RaceRecord = {
+      id: state.raceId,
+      at: Date.now(),
+      mode: state.mode,
+      target: state.result.target,
+      result: state.result,
+      agentRows: compactRows(Object.values(state.agent)),
+      humanRows: compactRows(Object.values(state.human)),
+    };
+    setRecords(appendRecord(rec));
+  }, [state.result, state.raceId, state.mode, state.agent, state.human]);
+
+  const stats = useMemo(() => historyStats(records), [records]);
 
   const running = state.phase === "running";
   const locked = running;
@@ -48,6 +79,8 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         onNew={onNew}
+        onOpenHistory={() => setHistoryOpen(true)}
+        recordCount={records.length}
         controlsLocked={locked}
       />
 
@@ -97,6 +130,18 @@ export default function App() {
           logs={state.logs}
         />
       </main>
+
+      <HistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        records={records}
+        stats={stats}
+        onClear={() => {
+          clearRecords();
+          setRecords([]);
+          savedIds.current.clear();
+        }}
+      />
     </div>
   );
 }

@@ -32,3 +32,14 @@ export interface Banner {
   title: string;
   detail: string;
 }
+
+export interface RaceResult {
+  target: string;
+  solo: boolean;
+  agentSolved: boolean;
+  humanSolved: boolean;
+  agentGuesses: number;
+  humanGuesses: number;
+  agentSteps: number;
+  winner: "human" | "agent" | "tie";
+}

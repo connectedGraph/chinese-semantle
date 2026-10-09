@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { Banner, LogEntry, RaceMode, Row } from "../types";
+import type { Banner, LogEntry, RaceMode, RaceResult, Row } from "../types";
 import { apiUrl, createRace, giveupRace, sendGuess, startRace } from "../lib/api";
 import { normalizeRow, rowsFromHistory, type RawHistory } from "../lib/normalize";
 
@@ -22,6 +22,7 @@ export interface RaceState {
   logs: LogEntry[];
   humanError: string | null;
   challengeError: string | null;
+  result: RaceResult | null;
   logSeq: number;
 }
 
@@ -56,6 +57,7 @@ function initialState(mode: RaceMode = "versus"): RaceState {
     logs: [],
     humanError: null,
     challengeError: null,
+    result: null,
     logSeq: 0,
   };
 }
@@ -216,21 +218,34 @@ function reducer(s: RaceState, a: Action): RaceState {
           });
         }
 
-        case "race_end":
+        case "race_end": {
+          const winner = (ev.winner === "human" || ev.winner === "agent" ? ev.winner : "tie") as RaceResult["winner"];
+          const result: RaceResult = {
+            target: String(ev.target ?? ""),
+            solo: Boolean(ev.solo) || s.mode === "challenge",
+            agentSolved: Boolean(ev.agent_solved),
+            humanSolved: Boolean(ev.human_solved),
+            agentGuesses: Number(ev.agent_guesses ?? s.agentGuesses),
+            humanGuesses: Number(ev.human_guesses ?? s.humanGuesses),
+            agentSteps: Number(ev.agent_steps ?? s.agentSteps),
+            winner,
+          };
           return {
             ...withLog(s, {
               kind: "note",
-              text: `结算：答案「${ev.target}」 · winner=${ev.winner ?? "-"}`,
+              text: `结算：答案「${result.target}」 · winner=${result.winner}`,
             }),
             phase: "finished",
             showAgent: true,
             humanDone: true,
-            humanGuesses: Number(ev.human_guesses ?? s.humanGuesses),
-            agentGuesses: Number(ev.agent_guesses ?? s.agentGuesses),
-            agentSteps: Number(ev.agent_steps ?? s.agentSteps),
+            humanGuesses: result.humanGuesses,
+            agentGuesses: result.agentGuesses,
+            agentSteps: result.agentSteps,
             banner: buildBanner(ev, s.mode),
             status: "对局结束",
+            result,
           };
+        }
 
         case "error":
           return withLog(s, { kind: "error", text: String(ev.message ?? "未知错误") });
