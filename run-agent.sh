@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Agent 对战开发版启动脚本
-#   ./run-agent.sh start|stop|restart|status|log
-# 后端 :8001，前端 :5174（与正式版 :8000/:5173 隔离，互不影响）
+# Agent 对战启动脚本（前端 = React + TS + Tailwind 工程，位于 web/）
+#   ./run-agent.sh start|stop|restart|status|log|build
+#   start  后端 :8001，前端 :5174（与正式版 :8000/:5173 隔离，互不影响）
+#   build  重新构建前端（web/dist）
+#   dev    前端 Vite 开发服务器 :5175（热更新，/api 代理到 :8001）
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -23,11 +25,17 @@ start() {
     echo "backend 启动中 -> http://127.0.0.1:$BACKEND_PORT"
   }
   is_up "$FRONTEND_PORT" && echo "frontend 已在 :$FRONTEND_PORT 运行" || {
-    setsid python3 -m http.server "$FRONTEND_PORT" --bind 127.0.0.1 --directory "$DIR/frontend" \
+    if [ ! -f "$DIR/web/dist/index.html" ]; then build_web; fi
+    setsid python3 -m http.server "$FRONTEND_PORT" --bind 127.0.0.1 --directory "$DIR/web/dist" \
       > "$LOG_DIR/frontend.log" 2>&1 < /dev/null &
     echo "frontend 启动中 -> http://127.0.0.1:$FRONTEND_PORT"
   }
-  echo "对战页面：http://127.0.0.1:$FRONTEND_PORT/race.html"
+  echo "对战页面：http://127.0.0.1:$FRONTEND_PORT/"
+}
+
+build_web() {
+  echo "构建前端 web/ ..."
+  ( cd "$DIR/web" && [ -d node_modules ] || npm install; npm run build )
 }
 
 stop() {
@@ -41,11 +49,17 @@ status() {
   is_up "$FRONTEND_PORT" && echo "frontend :$FRONTEND_PORT  UP" || echo "frontend :$FRONTEND_PORT  DOWN"
 }
 
+dev() {
+  ( cd "$DIR/web" && [ -d node_modules ] || npm install; npm run dev )
+}
+
 case "${1:-start}" in
   start) start ;;
   stop) stop ;;
   restart) stop; sleep 1; start ;;
   status) status ;;
+  build) build_web ;;
+  dev) dev ;;
   log) tail -f "$LOG_DIR/backend.log" ;;
-  *) echo "用法: $0 {start|stop|restart|status|log}"; exit 1 ;;
+  *) echo "用法: $0 {start|stop|restart|status|build|dev|log}"; exit 1 ;;
 esac

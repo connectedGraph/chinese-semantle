@@ -56,3 +56,8 @@ qqbot/*.log
 # botpy 默认会在 cwd 生成 botpy.log（虽然代码已禁用文件 handler，仍兜底）
 botpy.log
 botpy.log.*
+
+# React 前端工程
+web/node_modules/
+web/dist/
+web/.vite/

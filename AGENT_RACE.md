@@ -75,14 +75,38 @@ SEMANTLE_ENGINE=local      # 用真实词向量，任意词都有精确相似度
 ## 运行
 
 ```bash
-./run-agent.sh start     # 后端 :8001, 前端 :5174
+./run-agent.sh start     # 后端 :8001，前端 :5174（首次会自动构建前端）
+./run-agent.sh build     # 重新构建前端（web/dist）
+./run-agent.sh dev       # 前端 Vite 开发服务器 :5175（热更新，/api 代理到 :8001）
 ./run-agent.sh log       # 看后端日志
 ./run-agent.sh stop
 ```
 
-依赖与原版一致，额外需要 `httpx`（DeepSeek 客户端）与 `gensim`（local 引擎）。
+后端依赖与原版一致，额外需要 `httpx`（DeepSeek 客户端）、`gensim`（local 引擎）。
+前端需要 Node，首次运行 `cd web && npm install`。
 
-## 代码位置
+## 前端技术栈
+
+React 19 + TypeScript + Vite + Tailwind CSS v4：
+
+- **状态管理**：单个 `useReducer`（`web/src/hooks/useRace.ts`）集中处理 SSE 事件 / 猜词 / 日志，组件只读派生值（彻底摒弃之前散落各处的命令式 DOM 操作）
+- **日/夜间**：Tailwind `dark:` + `.dark` class，`useTheme` 持久化到 localStorage，首屏内联脚本防闪烁
+- 构建产物 gzip 后约 75KB
+
+```
+web/
+├── vite.config.ts        # /api 代理到 :8001
+├── src/
+│   ├── App.tsx
+│   ├── hooks/useRace.ts  # useReducer + EventSource
+│   ├── hooks/useTheme.ts
+│   ├── lib/{api,normalize,format}.ts
+│   ├── components/{Header,HumanPanel,AgentPanel,ResultTable,AgentLog}.tsx
+│   └── types.ts
+└── index.html
+```
+
+## 后端代码位置
 
 ```
 backend/app/agent/
@@ -91,11 +115,10 @@ backend/app/agent/
 ├── runner.py     # Agent 主循环（并行工具调用）
 ├── race.py       # 对战会话 + SSE 事件队列
 └── routes.py     # FastAPI 路由
-frontend/race.html / race.css / race.js
 ```
 
 ## 说明
 
 - 对战双方的游戏 `source="shared"`，不写入排行榜。
 - 冷门词（不在目标答案 Top-3000 邻居内）rank 显示为 `3000+`。
-- Agent 单局上限 `max_steps`（默认 12）个对话回合。
+- Agent 单局上限 `max_steps`（界面可选 12 / 30 / 50，默认 30）。
