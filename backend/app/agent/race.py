@@ -231,7 +231,7 @@ class RaceManager:
     def create(
         self,
         min_word_len: int = 2,
-        max_word_len: int = 4,
+        max_word_len: int = 2,
         target_word: Optional[str] = None,
         max_steps: int = 12,
     ) -> Race:

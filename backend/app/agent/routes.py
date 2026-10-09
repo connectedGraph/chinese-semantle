@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 class CreateRaceRequest(BaseModel):
     target_word: Optional[str] = Field(None, description="指定谜底（调试用）；为空则随机")
     min_word_len: int = Field(2, ge=1, le=8)
-    max_word_len: int = Field(4, ge=1, le=8)
+    max_word_len: int = Field(2, ge=1, le=8, description="目标词最大长度，默认 2")
     max_steps: int = Field(12, ge=1, le=50, description="Agent 最多对话回合数")
 
 

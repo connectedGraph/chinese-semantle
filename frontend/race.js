@@ -124,6 +124,7 @@
     els.humanForm.reset();
     els.humanInput.disabled = false;
     els.humanForm.querySelector("button").disabled = false;
+    els.btnGiveup.disabled = false;
     setAgentVisible(false);
     renderTable(els.humanRows, state.human, "还没有猜测");
     renderTable(els.agentRows, state.agent, "还没有猜测");
@@ -132,7 +133,7 @@
     const resp = await fetch(API + "/api/agent/race", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ min_word_len: 2, max_word_len: 4, max_steps: 12 }),
+      body: JSON.stringify({ min_word_len: 2, max_word_len: 2, max_steps: 12 }),
     });
     if (!resp.ok) { addLog("创建对局失败: " + (await resp.text()), "log-error"); return; }
     const race = await resp.json();
@@ -282,5 +283,20 @@
     humanGuess(w);
   });
 
-  newRace();
+  // 不自动开局：打开页面只显示待机状态，点「开始新对局」才创建并启动 Agent
+  function initIdle() {
+    els.status.textContent = "点击「开始新对局」（目标默认 2 字）";
+    els.humanInput.value = "";
+    els.humanInput.disabled = true;
+    els.humanForm.querySelector("button").disabled = true;
+    els.btnGiveup.disabled = true;
+    els.banner.hidden = true;
+    els.agentLog.innerHTML = '<div class="empty">等待开始…</div>';
+    setAgentVisible(false);
+    state.human.clear(); state.agent.clear();
+    renderTable(els.humanRows, state.human, "点击「开始新对局」");
+    renderTable(els.agentRows, state.agent, "等待开始");
+    updateStats();
+  }
+  initIdle();
 })();
