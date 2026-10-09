@@ -47,16 +47,17 @@ TOOL_SCHEMAS: List[Dict[str, Any]] = [
         "function": {
             "name": "view_topk",
             "description": (
-                "查看隐藏答案的 Top-K 最相似词（按相似度降序，含相似度与排名）。"
-                "k=-1 表示查看全部（最多 3000 个）。这是最直接的侦察手段："
-                "排名越靠前的词离答案越近，可据此推断答案。"
+                "查看你到目前为止已经猜过的词的整理结果：按与答案的接近程度降序排列"
+                "（相似度越高 / rank 越小越接近答案），返回一行一词一相似度一rank。"
+                "k 表示只取最接近的前 k 条，k=-1 表示返回全部已猜词。"
+                "它只是帮你回顾和整理已有线索，不会产生新的猜测、也不会透露答案。"
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "k": {
                         "type": "integer",
-                        "description": "查看前 k 个；-1 表示全部（最多 3000 个）。默认 -1。",
+                        "description": "返回已猜词中最接近的前 k 条；-1 表示全部。默认 -1。",
                         "default": -1,
                     }
                 },
@@ -142,20 +143,28 @@ class ToolExecutor:
         return rows
 
     def view_topk(self, k: int = -1) -> List[Dict[str, Any]]:
+        """整理「当前已经猜过的词」：按接近度（相似度降序 / rank 升序）排列。"""
         if k is None:
             k = -1
-        top = self.game.top_neighbors
-        take = len(top) if k is None or k < 0 else min(int(k), len(top))
+        # 同一个词只保留最好的一次记录
+        best: Dict[str, Any] = {}
+        for rec in self.game.history:
+            prev = best.get(rec.word)
+            if prev is None or rec.similarity > prev.similarity:
+                best[rec.word] = rec
         rows: List[Dict[str, Any]] = []
-        for i, (w, s) in enumerate(top[:take]):
+        for rec in sorted(best.values(), key=lambda r: r.similarity, reverse=True):
             rows.append({
-                "word": w,
-                "similarity_pct": round(s * 100, 2),
-                "similarity": round(s, 6),
-                "rank": i + 1,
-                "source": "topk",
+                "word": rec.word,
+                "similarity_pct": rec.similarity_pct,
+                "similarity": rec.similarity,
+                "rank": rec.proximity_rank or _rank_of(self.game, rec.similarity),
+                "level": rec.proximity_level,
+                "is_target": rec.is_target,
+                "source": "history",
             })
-        return rows
+        take = len(rows) if k < 0 else min(int(k), len(rows))
+        return rows[:take]
 
     # -------- 统一入口 --------
 
@@ -173,6 +182,6 @@ class ToolExecutor:
             except (TypeError, ValueError):
                 k = -1
             rows = self.view_topk(k)
-            header = f"# 目标答案的 Top-{len(rows)} 相似词（输入词数 {len(rows)}）\n"
+            header = f"# 你已猜过的词（按接近度排序，共 {len(rows)} 条）\n"
             return header + _fmt_rows(rows), rows
         raise ValueError(f"未知工具：{name}")
