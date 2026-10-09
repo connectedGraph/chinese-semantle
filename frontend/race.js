@@ -85,7 +85,12 @@
     els.agentCount.textContent = state.agentGuesses || state.agent.size;
     const hb = best(state.human), ab = best(state.agent);
     els.humanBest.textContent = hb ? `${hb.word} ${pctText(hb)}%` : "-";
-    els.agentBest.textContent = ab ? `${ab.word} ${pctText(ab)}%` : "-";
+    // Agent 遮蔽时连「最佳」也不能显示词名/百分比——否则等于直接泄露答案
+    if (state.showAgent) {
+      els.agentBest.textContent = ab ? `${ab.word} ${pctText(ab)}%` : "-";
+    } else {
+      els.agentBest.textContent = ab ? "🔒 已遮蔽" : "-";
+    }
     els.agentSteps.textContent = state.steps;
   }
 
@@ -102,6 +107,7 @@
     els.agentDetail.classList.toggle("hidden", !visible);
     els.agentMask.classList.toggle("hidden", visible);
     els.btnToggleAgent.textContent = visible ? "遮住 Agent 思考" : "看 Agent 思考";
+    updateStats();
   }
 
   // ---------- 新对局 ----------

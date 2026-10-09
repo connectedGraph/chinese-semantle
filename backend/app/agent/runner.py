@@ -155,12 +155,13 @@ class AgentRunner:
                 break
 
         solved = self.game.is_finished
+        # 注意：不在 finish 事件里带 target —— 对局中该事件会被前端暴露给玩家，
+        # 答案只在最后的 race_end（结算）里揭晓。
         result = {
             "type": "finish",
             "solved": solved,
             "steps": steps,
             "guesses": self.game.guess_count,
-            "target": self.game.target if solved else None,
             "usage": self.client.total_usage,
         }
         await self.emit(result)

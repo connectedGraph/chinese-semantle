@@ -83,14 +83,19 @@ class Race:
         })
         if self.human_game.is_finished:
             await self._human_finish(solved=True)
-        return {"record": rec.model_dump(mode="json"), **self.snapshot()}
+        # 只回人类自己的信息，**不回 agent_history**，避免对局中泄露 Agent 的猜测
+        return {
+            "record": rec.model_dump(mode="json"),
+            "human_guesses": self.human_game.guess_count,
+            "human_done": self.human_done,
+        }
 
     async def human_giveup(self) -> Dict[str, Any]:
         if not self.human_done:
             self.human_game.is_finished = True
             self.human_game.give_up_ever = True
             await self._human_finish(solved=False)
-        return self.snapshot()
+        return {"human_guesses": self.human_game.guess_count, "human_done": self.human_done}
 
     async def _human_finish(self, solved: bool) -> None:
         self.human_done = True
