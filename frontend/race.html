@@ -35,6 +35,7 @@
         <input id="challenge-input" placeholder="输入一个词作为答案，例如：刺猬" autocomplete="off" />
         <button id="btn-challenge-start" class="btn" type="button">让 Agent 猜</button>
       </div>
+      <div id="challenge-error" class="form-error" hidden></div>
       <div id="challenge-tip" class="status-note" hidden>
         你不参与猜测，只是出题并旁观 DeepSeek 解题；可以实时看到它的思考与工具调用。
       </div>
@@ -44,6 +45,7 @@
         <input id="human-input" placeholder="输入一个中文词，回车提交" autocomplete="off" />
         <button class="btn" type="submit">猜</button>
       </form>
+      <div id="human-error" class="form-error" hidden></div>
       <div class="table-wrap" id="human-table-wrap">
         <table class="result">
           <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>

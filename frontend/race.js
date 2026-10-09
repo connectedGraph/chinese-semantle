@@ -15,6 +15,7 @@
     humanMeta: $("human-meta"),
     humanForm: $("human-form"),
     humanInput: $("human-input"),
+    humanError: $("human-error"),
     humanTableWrap: $("human-table-wrap"),
     humanRows: $("human-rows"),
     humanCount: $("human-count"),
@@ -22,6 +23,7 @@
     btnGiveup: $("btn-giveup"),
     challengeSetup: $("challenge-setup"),
     challengeInput: $("challenge-input"),
+    challengeError: $("challenge-error"),
     challengeTip: $("challenge-tip"),
     btnChallengeStart: $("btn-challenge-start"),
     agentRows: $("agent-rows"),
@@ -73,6 +75,22 @@
     let b = null;
     for (const r of map.values()) if (!b || (r.similarity_pct ?? -999) > (b.similarity_pct ?? -999)) b = r;
     return b;
+  }
+
+  function showError(el, msg) { el.textContent = msg; el.hidden = false; }
+  function clearError(el) { el.textContent = ""; el.hidden = true; }
+  const CJK_RE = /^[\u4e00-\u9fff]{1,8}$/;
+
+  // 从后端错误响应里抽取可读信息（detail 可能是 str 或 pydantic 的 list）
+  async function readError(resp) {
+    const txt = await resp.text();
+    try {
+      const j = JSON.parse(txt);
+      const d = j.detail;
+      if (typeof d === "string") return d;
+      if (Array.isArray(d)) return d.map((x) => x.msg || JSON.stringify(x)).join("；");
+      return txt;
+    } catch { return txt; }
   }
 
   function renderTable(tbody, map, emptyText) {
@@ -153,6 +171,7 @@
     els.status.textContent = state.mode === "challenge"
       ? "输入答案，点「让 Agent 猜」"
       : "点击「开始新对局」（目标默认 2 字）";
+    clearError(els.humanError); clearError(els.challengeError);
     els.humanInput.value = "";
     els.humanInput.disabled = true;
     els.humanForm.querySelector("button").disabled = true;
@@ -191,6 +210,12 @@
     const body = { min_word_len: 2, max_word_len: 2, max_steps: 12, mode: state.mode };
     if (state.mode === "challenge") {
       const w = (els.challengeInput.value || "").trim();
+      if (w && !CJK_RE.test(w)) {
+        showError(els.challengeError, "只能输入 1~8 个汉字");
+        els.btnChallengeStart.disabled = false;
+        els.btnMode.disabled = false;
+        return;
+      }
       if (w) body.target_word = w;
     }
 
@@ -200,16 +225,15 @@
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!resp.ok) {
-        els.banner.hidden = false; els.banner.className = "banner";
-        els.banner.textContent = "创建失败：" + (await resp.text());
+        const msg = await readError(resp);
         initIdle();
+        showError(state.mode === "challenge" ? els.challengeError : els.humanError, msg);
         return;
       }
       race = await resp.json();
     } catch (e) {
-      els.banner.hidden = false; els.banner.className = "banner";
-      els.banner.textContent = "创建失败：" + e;
       initIdle();
+      showError(state.mode === "challenge" ? els.challengeError : els.humanError, "网络错误：" + e);
       return;
     }
 
@@ -346,15 +370,21 @@
     if (!state.raceId || state.humanDone || state.mode === "challenge") return;
     word = (word || "").trim();
     if (!word) return;
+    clearError(els.humanError);
+    if (!CJK_RE.test(word)) {
+      showError(els.humanError, "只能输入 1~8 个汉字");
+      return;
+    }
     try {
       const resp = await fetch(`${API}/api/agent/race/${state.raceId}/guess`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ word }),
       });
       if (!resp.ok) {
-        els.banner.hidden = false; els.banner.className = "banner";
-        els.banner.textContent = "猜词失败：" + (await resp.text());
+        showError(els.humanError, "猜词失败：" + (await readError(resp)));
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      showError(els.humanError, "网络错误：" + e);
+    }
   }
 
   async function giveup() {
@@ -370,6 +400,8 @@
   els.challengeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") newRace(); });
   els.btnToggleAgent.addEventListener("click", () => setAgentVisible(!state.showAgent));
   els.btnGiveup.addEventListener("click", giveup);
+  els.humanInput.addEventListener("input", () => clearError(els.humanError));
+  els.challengeInput.addEventListener("input", () => clearError(els.challengeError));
   els.humanForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const w = els.humanInput.value;

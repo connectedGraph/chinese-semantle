@@ -31,6 +31,11 @@ async def create_race(req: CreateRaceRequest = CreateRaceRequest()):
     mgr = get_manager()
     if req.min_word_len > req.max_word_len:
         raise HTTPException(400, "min_word_len 不能大于 max_word_len")
+    if req.target_word is not None:
+        w = req.target_word.strip()
+        if not w or len(w) > 8 or any(not ("\u4e00" <= ch <= "\u9fff") for ch in w):
+            raise HTTPException(422, "谜底词必须是 1~8 个汉字")
+        req.target_word = w
     try:
         race = mgr.create(
             min_word_len=req.min_word_len,
