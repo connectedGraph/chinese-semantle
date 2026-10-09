@@ -7,7 +7,13 @@
 1. 打开 `frontend/race.html`（本地开发 http://127.0.0.1:5174/race.html）
 2. 页面自动开一局：人类和 Agent 各拿一局**相同谜底**的游戏
 3. 你在左边输入中文词猜；Agent 在右边通过工具调用自动猜
-4. 谁先猜中谁赢；答案揭晓，显示双方猜测次数
+4. **比谁猜中用的猜测次数更少**（LLM 回复快是速度优势，不参与比较）
+5. Agent 猜中后会停下，你继续猜直到猜中或点「放弃」，然后结算：
+   - 双方都猜中 → 次数少者胜
+   - 仅一方猜中 → 该方胜
+   - 都没猜中 → 平局
+
+**遮蔽机制**：对局中 Agent 的思维链、工具调用和猜测结果默认被遮住（避免偷看），点右上角「看 Agent 思考」可随时展开；对局结束时自动全部揭晓。
 
 Agent 不能偷看答案，只能靠 `guess` 试探 + `view_topk` 整理自己已猜过的结果，因此和人类一样靠推理收敛。
 
@@ -34,10 +40,10 @@ Agent **只有这两个工具**，且都支持并行：
 | POST | `/api/agent/race/{id}/start` | 启动 Agent |
 | GET | `/api/agent/race/{id}` | 对战快照 |
 | POST | `/api/agent/race/{id}/guess` | 人类猜词 |
-| POST | `/api/agent/race/{id}/giveup` | 认输/揭晓 |
+| POST | `/api/agent/race/{id}/giveup` | 人类放弃（结算仍等 Agent 结束） |
 | GET | `/api/agent/race/{id}/events` | SSE 事件流（思考 / 工具调用 / 结果 / 结束） |
 
-SSE 事件类型：`snapshot` `start` `assistant` `tool_result` `guess_table` `human_guess` `finish` `race_end` `error`。
+SSE 事件类型：`snapshot` `start` `assistant` `tool_result` `guess_table` `human_guess` `human_done` `finish` `agent_done` `race_end` `error`。
 
 ## 环境变量（`.env`，不入库）
 

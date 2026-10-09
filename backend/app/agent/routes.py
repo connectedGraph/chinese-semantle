@@ -62,12 +62,14 @@ async def human_guess(race_id: str, req: HumanGuessRequest):
     race = get_manager().get(race_id)
     if not race:
         raise HTTPException(404, "race not found")
-    if race.human_game.is_finished:
-        raise HTTPException(400, "人类这边已经猜中了")
+    if race.human_done:
+        raise HTTPException(400, "你这边已经结束（猜中或已放弃）")
     try:
         return await race.human_guess(req.word)
     except ValueError as e:
         raise HTTPException(422, str(e))
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/race/{race_id}/giveup")
@@ -75,9 +77,7 @@ async def giveup(race_id: str):
     race = get_manager().get(race_id)
     if not race:
         raise HTTPException(404, "race not found")
-    if not race.finished:
-        await race._end(None)
-    return race.snapshot()
+    return await race.human_giveup()
 
 
 @router.get("/race/{race_id}/events")

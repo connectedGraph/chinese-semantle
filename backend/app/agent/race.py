@@ -1,9 +1,10 @@
 """
-对战（Race）会话：人类与 Agent 猜同一个隐藏答案，谁先猜中谁赢。
+对战（Race）会话：人类与 Agent 猜同一个隐藏答案。
 
-- 人类：走 race 的 guess 接口，记录到 human_game
-- Agent：后台 asyncio 任务跑 AgentRunner，记录到 agent_game
-- 双方事件都在同一个 asyncio.Queue 里，/events 用 SSE 推送
+胜负判据：**猜中答案所用的猜测次数（guess_count）更少者胜**。
+- LLM 回复快是速度优势，不参与比较；效率看"花了多少次猜测"。
+- Agent 先猜中不会立即结束对局：它停下，人类继续，直到人类也猜中或放弃，再结算。
+- 双方都猜中 → 次数少者胜；仅一方猜中 → 该方胜；都没猜中 → 平局。
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
 
 from ..game import Game, GameStore
 from .deepseek import DeepSeekClient
@@ -33,7 +34,13 @@ class Race:
         self.queue: asyncio.Queue = asyncio.Queue()
         self.started = False
         self.finished = False
-        self.winner: Optional[str] = None  # "human" | "agent" | None
+        self.winner: Optional[str] = None  # "human" | "agent" | "tie" | None
+        # 双方各自的完成状态
+        self.agent_done = False
+        self.agent_solved = False
+        self.agent_steps = 0
+        self.human_done = False
+        self.human_solved = False
         self._stop = False
         self._task: Optional[asyncio.Task] = None
         self._client: Optional[DeepSeekClient] = None
@@ -56,6 +63,9 @@ class Race:
             "agent_guesses": self.agent_game.guess_count,
             "human_solved": self.human_game.is_finished,
             "agent_solved": self.agent_game.is_finished,
+            "human_done": self.human_done,
+            "agent_done": self.agent_done,
+            "agent_steps": self.agent_steps,
             "human_history": [r.model_dump(mode="json") for r in self.human_game.history],
             "agent_history": [r.model_dump(mode="json") for r in self.agent_game.history],
         }
@@ -63,17 +73,34 @@ class Race:
     # -------- 人类猜词 --------
 
     async def human_guess(self, word: str) -> Dict[str, Any]:
-        if self.finished:
-            raise RuntimeError("本局已结束")
+        if self.human_done:
+            raise RuntimeError("你这边已经结束")
         rec = self.store.guess(self.human_game, word)
         await self.emit({
             "type": "human_guess",
             "record": rec.model_dump(mode="json"),
             "finished": self.human_game.is_finished,
         })
-        if self.human_game.is_finished and not self.finished:
-            await self._end("human")
+        if self.human_game.is_finished:
+            await self._human_finish(solved=True)
         return {"record": rec.model_dump(mode="json"), **self.snapshot()}
+
+    async def human_giveup(self) -> Dict[str, Any]:
+        if not self.human_done:
+            self.human_game.is_finished = True
+            self.human_game.give_up_ever = True
+            await self._human_finish(solved=False)
+        return self.snapshot()
+
+    async def _human_finish(self, solved: bool) -> None:
+        self.human_done = True
+        self.human_solved = solved
+        await self.emit({
+            "type": "human_done",
+            "solved": solved,
+            "guesses": self.human_game.guess_count,
+        })
+        await self._maybe_settle()
 
     # -------- 启动 Agent --------
 
@@ -98,12 +125,46 @@ class Race:
         except Exception as e:  # noqa: BLE001
             logger.exception("agent run failed")
             await self.emit({"type": "error", "message": f"Agent 异常：{e}"})
-            await self._end(None)
+            if not self.agent_done:
+                self.agent_done = True
+                await self.emit({"type": "agent_done", "solved": False,
+                                 "guesses": self.agent_game.guess_count, "steps": self.agent_steps})
+                await self._maybe_settle()
 
     async def _agent_emit(self, event: Dict[str, Any]) -> None:
         await self.emit(event)
-        if event.get("type") == "finish" and event.get("solved") and not self.finished:
-            await self._end("agent")
+        if event.get("type") == "finish" and not self.agent_done:
+            self.agent_done = True
+            self.agent_solved = bool(event.get("solved"))
+            self.agent_steps = int(event.get("steps") or 0)
+            await self.emit({
+                "type": "agent_done",
+                "solved": self.agent_solved,
+                "guesses": self.agent_game.guess_count,
+                "steps": self.agent_steps,
+            })
+            await self._maybe_settle()
+
+    # -------- 结算 --------
+
+    async def _maybe_settle(self) -> None:
+        if self.finished:
+            return
+        if self.agent_done and self.human_done:
+            await self._settle()
+
+    async def _settle(self) -> None:
+        hg, ag = self.human_game.guess_count, self.agent_game.guess_count
+        hs, asolved = self.human_solved, self.agent_solved
+        if hs and asolved:
+            winner = "human" if hg < ag else "agent" if ag < hg else "tie"
+        elif hs:
+            winner = "human"
+        elif asolved:
+            winner = "agent"
+        else:
+            winner = "tie"
+        await self._end(winner)
 
     async def _end(self, winner: Optional[str]) -> None:
         if self.finished:
@@ -114,22 +175,32 @@ class Race:
         await self.emit({
             "type": "race_end",
             "winner": winner,
+            "metric": "guesses",  # 按猜测次数比
             "target": self.target,
             "human_guesses": self.human_game.guess_count,
             "agent_guesses": self.agent_game.guess_count,
+            "human_solved": self.human_solved,
+            "agent_solved": self.agent_solved,
+            "agent_steps": self.agent_steps,
         })
 
     async def close(self) -> None:
         self._stop = True
         if self._task and not self._task.done():
             self._task.cancel()
+            try:
+                await asyncio.wait_for(self._task, timeout=2.0)
+            except Exception:  # noqa: BLE001  (含 CancelledError / TimeoutError)
+                pass
         if self._client:
-            await self._client.aclose()
+            try:
+                await asyncio.wait_for(self._client.aclose(), timeout=2.0)
+            except Exception:  # noqa: BLE001
+                pass
 
     # -------- SSE --------
 
     async def stream(self) -> AsyncGenerator[str, None]:
-        # 先补发快照，方便晚连的客户端
         yield _sse({"type": "snapshot", "race_id": self.id, **self.snapshot()})
         while True:
             try:
@@ -139,7 +210,6 @@ class Race:
                 continue
             yield _sse(ev)
             if ev.get("type") == "race_end":
-                # 结束后再等一小会儿确保事件已消费，然后结束流
                 await asyncio.sleep(0.05)
                 return
 
@@ -160,14 +230,11 @@ class RaceManager:
         target_word: Optional[str] = None,
         max_steps: int = 12,
     ) -> Race:
-        # 两边用同一个谜底：先开一局拿到 target，再为 Agent 开同 target 的一局
         base = self.store.create_game(
             min_word_len=min_word_len, max_word_len=max_word_len,
             target_word=target_word, source="shared",
         )
-        agent_game = self.store.create_game(
-            target_word=base.target, source="shared",
-        )
+        agent_game = self.store.create_game(target_word=base.target, source="shared")
         race = Race(self.store, base, agent_game, max_steps=max_steps)
         self._races[race.id] = race
         return race

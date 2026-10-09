@@ -109,3 +109,17 @@ tr.target td { background: rgba(53,192,122,.12); }
   max-height: 90px; overflow: auto;
 }
 .log-error { color: var(--hot); }
+
+/* --- Agent 遮蔽 / 展开 --- */
+.panel-head .meta { margin-left: auto; }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+.agent-mask {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 30px; text-align: center; color: var(--muted);
+}
+.mask-big { font-size: 16px; color: var(--text); }
+.mask-sub { font-size: 12px; max-width: 360px; line-height: 1.6; }
+.agent-mask.hidden { display: none; }
+.agent-detail { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.agent-detail.hidden { display: none; }
+.status-note { color: var(--muted); font-size: 12px; padding: 6px 16px; border-bottom: 1px solid var(--line); }

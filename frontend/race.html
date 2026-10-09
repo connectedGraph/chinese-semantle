@@ -11,7 +11,7 @@
     <div class="brand">
       <span class="dot"></span>
       <h1>Agent 对战</h1>
-      <span class="sub">你 vs DeepSeek</span>
+      <span class="sub">你 vs DeepSeek · 比谁猜中的次数少</span>
     </div>
     <div class="controls">
       <span id="status" class="status">未开始</span>
@@ -26,6 +26,7 @@
       <div class="panel-head">
         <h2>你</h2>
         <span class="meta">猜测 <b id="human-count">0</b> · 最佳 <b id="human-best">-</b></span>
+        <button id="btn-giveup" class="btn small" type="button">放弃</button>
       </div>
       <form id="human-form" class="guess-form">
         <input id="human-input" placeholder="输入一个中文词，回车提交" autocomplete="off" />
@@ -43,19 +44,25 @@
       <div class="panel-head">
         <h2>DeepSeek Agent</h2>
         <span class="meta">猜测 <b id="agent-count">0</b> · 最佳 <b id="agent-best">-</b> · 步数 <b id="agent-steps">0</b></span>
+        <button id="btn-toggle-agent" class="btn small" type="button">看 Agent 思考</button>
       </div>
-      <div id="agent-log" class="agent-log"><div class="empty">等待开始…</div></div>
-      <div class="table-wrap">
-        <table class="result">
-          <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>
-          <tbody id="agent-rows"><tr class="empty"><td colspan="4">还没有猜测</td></tr></tbody>
-        </table>
+      <div id="agent-mask" class="agent-mask">
+        <div class="mask-big">🔒 Agent 正在独立思考</div>
+        <div class="mask-sub">它的思维链、工具调用和猜测结果默认遮蔽，避免偷看。可点右上角查看，或等对局结束后自动揭晓。</div>
+      </div>
+      <div id="agent-detail" class="agent-detail hidden">
+        <div id="agent-log" class="agent-log"><div class="empty">等待开始…</div></div>
+        <div class="table-wrap">
+          <table class="result">
+            <thead><tr><th>#</th><th>词</th><th>相似度</th><th>rank</th></tr></thead>
+            <tbody id="agent-rows"><tr class="empty"><td colspan="4">还没有猜测</td></tr></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
 
   <script>
-    // API 地址：本地开发（:5174）指向后端 :8001；部署时设为同源或注入
     window.SEMANTLE_API_BASE = window.SEMANTLE_API_BASE || "http://127.0.0.1:8001";
   </script>
   <script src="race.js"></script>

@@ -19,6 +19,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -90,7 +91,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down.")
     try:
-        await get_agent_manager().close_all()
+        await asyncio.wait_for(get_agent_manager().close_all(), timeout=5.0)
     except Exception:  # noqa: BLE001
         pass
     try:
